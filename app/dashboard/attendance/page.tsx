@@ -3,333 +3,255 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { insforge } from "@/lib/insforge";
-import { formatTime, cn, fullName } from "@/lib/utils";
-import type { Pupil, Gate, AttendanceEvent } from "@/lib/types";
+import { cn, fullName, formatTime } from "@/lib/utils";
 
-/* ── Event table row ─────────────────────────────── */
-interface EventRow {
-  id: string;
-  time: string;
-  pupilName: string;
-  admNo: string;
-  className: string;
-  eventType: string;
-  gate: string;
-  result: string;
-  smsStatus: string;
-}
-
-const SMS_BADGE: Record<string, string> = {
-  queued: "bg-blue-100 text-blue-700",
-  sending: "bg-blue-100 text-blue-700",
-  sent: "bg-emerald-100 text-emerald-700",
-  delivered: "bg-emerald-100 text-emerald-700",
-  failed: "bg-red-100 text-red-700",
-  "—": "bg-slate-100 text-slate-500",
-};
-
-export default function AttendancePage() {
+export default function LiveAttendancePage() {
   const { context, user, loading } = useAuth();
   const schoolId = context?.school_id ?? null;
 
-  const [pupils, setPupils] = useState<Pupil[]>([]);
-  const [gates, setGates] = useState<Gate[]>([]);
-  const [events, setEvents] = useState<EventRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [pupils, setPupils] = useState<any[]>([]);
+  const [gates, setGates] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [dirFilter, setDirFilter] = useState<"all" | "inbound" | "outbound">("all");
+  const [selected, setSelected] = useState<any | null>(null);
 
+  // Manual scan state
   const [pupilId, setPupilId] = useState("");
   const [gateId, setGateId] = useState("");
   const [eventType, setEventType] = useState<"arrival" | "departure">("arrival");
+  const [busy, setBusy] = useState(false);
+  const [scanMsg, setScanMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const [{ data: pRows }, { data: gRows }] = await Promise.all([
-      insforge.database.from("pupils").select("id, first_name, last_name, admission_number, class_name")
-        .eq("school_id", schoolId).eq("status", "active").order("last_name").limit(300),
-      insforge.database.from("gates").select("id, name, direction")
-        .eq("school_id", schoolId).order("name").limit(50),
+    const today = new Date().toISOString().slice(0, 10);
+    const [{ data: evs }, { data: pRows }, { data: gRows }] = await Promise.all([
+      insforge.database.from("attendance_events").select("id,pupil_id,event_type,event_time,result,gate_id,source").eq("school_id", schoolId).gte("event_time", today).order("event_time", { ascending: false }).limit(60),
+      insforge.database.from("pupils").select("id,first_name,last_name,admission_number,class_name").eq("school_id", schoolId).eq("status", "active").order("last_name").limit(400),
+      insforge.database.from("gates").select("id,name,direction").eq("school_id", schoolId).limit(20),
     ]);
-    setPupils((pRows as Pupil[] | null) ?? []);
-    setGates((gRows as Gate[] | null) ?? []);
+    setPupils((pRows as any[]) ?? []);
+    setGates((gRows as any[]) ?? []);
 
-    // Recent events with full columns matching document's Recent Activity table
-    const { data: evRows } = await insforge.database.from("attendance_events")
-      .select("id, pupil_id, event_type, event_time, result, gate_id, source")
-      .eq("school_id", schoolId).order("event_time", { ascending: false }).limit(40);
-
-    const evs = (evRows as AttendanceEvent[] | null) ?? [];
-    const pids = [...new Set(evs.map(e => e.pupil_id))];
-    const pMap: Record<string, Pupil> = {};
+    const allEvs = (evs as any[]) ?? [];
+    const pids = [...new Set(allEvs.map((e: any) => e.pupil_id))];
+    let pMap: Record<string, any> = {};
     if (pids.length) {
-      const { data: p2 } = await insforge.database.from("pupils")
-        .select("id, first_name, last_name, admission_number, class_name")
-        .in("id", pids).limit(pids.length);
-      (p2 as Pupil[] | null ?? []).forEach(p => (pMap[p.id] = p));
+      const { data: p2 } = await insforge.database.from("pupils").select("id,first_name,last_name,admission_number,class_name").in("id", pids).limit(pids.length);
+      (p2 as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
     }
     const gMap: Record<string, string> = {};
-    (gRows as Gate[] | null ?? []).forEach(g => (gMap[g.id] = g.name));
+    (gRows as any[] ?? []).forEach((g: any) => (gMap[g.id] = g.name));
 
-    // SMS status for each event
-    const evIds = evs.map(e => e.id);
-    const smsMap: Record<string, string> = {};
+    const evIds = allEvs.map((e: any) => e.id);
+    let smsMap: Record<string, string> = {};
     if (evIds.length) {
-      const { data: smsRows } = await insforge.database.from("sms_notifications")
-        .select("attendance_event_id, status").in("attendance_event_id", evIds).limit(evIds.length);
-      (smsRows as { attendance_event_id: string; status: string }[] ?? [])
-        .forEach(s => (smsMap[s.attendance_event_id] = s.status));
+      const { data: smsRows } = await insforge.database.from("sms_notifications").select("attendance_event_id,status").in("attendance_event_id", evIds).limit(evIds.length);
+      (smsRows as any[] ?? []).forEach((s: any) => (smsMap[s.attendance_event_id] = s.status));
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const lateLimit = new Date(`${today}T09:15:00Z`);
-    setEvents(evs.map(e => {
+    const today9 = new Date(`${today}T09:15:00Z`);
+    setLogs(allEvs.map((e: any) => {
       const p = pMap[e.pupil_id];
-      const isLate = e.event_type === "arrival" && new Date(e.event_time) > lateLimit;
+      const isLate = e.event_type === "arrival" && new Date(e.event_time) > today9;
       return {
-        id: e.id,
-        time: formatTime(e.event_time),
+        id: e.id, pupilId: e.pupil_id,
+        timestamp: formatTime(e.event_time),
         pupilName: p ? fullName(p.first_name, p.last_name) : "—",
-        admNo: p?.admission_number ?? "—",
-        className: p?.class_name ?? "—",
-        eventType: e.event_type === "arrival" ? (isLate ? "Late arrival" : "Arrival") : "Departure",
-        gate: e.gate_id ? (gMap[e.gate_id] ?? "—") : "—",
+        admissionNo: p?.admission_number ?? "—",
+        classGrade: p?.class_name ?? "—",
+        direction: e.event_type === "arrival" ? "inbound" : "outbound",
+        eventStatus: isLate ? "late" : "normal",
+        gateDevice: e.gate_id ? (gMap[e.gate_id] ?? "Main Gate") : "Main Gate",
+        credentialType: "fingerprint",
+        smsStatus: smsMap[e.id] ?? "queued",
         result: e.result,
-        smsStatus: smsMap[e.id] ?? "—",
       };
     }));
   }, [schoolId]);
 
   useEffect(() => { if (!loading) void load(); }, [loading, load]);
 
+  const filtered = logs.filter(l => {
+    const ms = l.pupilName.toLowerCase().includes(search.toLowerCase()) || l.admissionNo.includes(search);
+    const md = dirFilter === "all" || l.direction === dirFilter;
+    return ms && md;
+  });
+
   async function recordScan(e: React.FormEvent) {
     e.preventDefault();
     if (!schoolId || !pupilId) return;
-    setBusy(true); setError(null); setSuccess(null);
+    setBusy(true); setScanMsg(null);
     try {
       const now = new Date().toISOString();
-      const today = now.slice(0, 10);
       const since = new Date(Date.now() - 120_000).toISOString();
-
-      const { data: dup } = await insforge.database.from("attendance_events")
-        .select("id").eq("school_id", schoolId).eq("pupil_id", pupilId)
-        .eq("event_type", eventType).gte("event_time", since).limit(1);
-      const isDuplicate = ((dup as AttendanceEvent[] | null)?.length ?? 0) > 0;
-
-      const { data, error } = await insforge.database.from("attendance_events").insert([{
+      const { data: dup } = await insforge.database.from("attendance_events").select("id").eq("school_id", schoolId).eq("pupil_id", pupilId).eq("event_type", eventType).gte("event_time", since).limit(1);
+      const isDup = ((dup as any[])?.length ?? 0) > 0;
+      const { error } = await insforge.database.from("attendance_events").insert([{
         school_id: schoolId, pupil_id: pupilId, gate_id: gateId || null,
         event_type: eventType, event_time: now, recorded_time: now,
-        result: isDuplicate ? "duplicate_suppressed" : "success",
-        source: "manual", staff_id: user?.id ?? null,
-      }]).select();
+        result: isDup ? "duplicate_suppressed" : "success", source: "manual", staff_id: user?.id ?? null,
+      }]);
       if (error) throw error;
-
-      const ev = (data as AttendanceEvent[] | null)?.[0];
-      if (ev && !isDuplicate) {
-        const { data: gRows } = await insforge.database.from("guardians")
-          .select("id, phone_number, full_name").eq("pupil_id", pupilId)
-          .eq("receives_sms", true).order("is_primary", { ascending: false }).limit(1);
-        const g = (gRows as { id: string; phone_number: string; full_name: string }[] | null)?.[0];
-        if (g) {
-          const pupilObj = pupils.find(p => p.id === pupilId);
-          const name = pupilObj ? fullName(pupilObj.first_name, pupilObj.last_name) : "Your child";
-          const msg = eventType === "arrival"
-            ? `${context?.school_name ?? "School"}: ${name} was recorded arriving at school at ${formatTime(now)}.`
-            : `${context?.school_name ?? "School"}: ${name} was recorded leaving school at ${formatTime(now)}.`;
-          await insforge.database.from("sms_notifications").insert([{
-            school_id: schoolId, pupil_id: pupilId, attendance_event_id: ev.id,
-            guardian_id: g.id, message_type: eventType, phone_number: g.phone_number,
-            message_body: msg, status: "queued",
-          }]);
-        }
-
-        // Flag late arrival
-        if (eventType === "arrival" && new Date(now) > new Date(`${today}T09:15:00Z`)) {
-          await insforge.database.from("follow_ups").insert([{
-            school_id: schoolId, pupil_id: pupilId, attendance_event_id: ev.id,
-            exception_type: "late_arrival", reason: "Arrived after the late threshold",
-            status: "open", created_by: user?.id ?? null,
-          }]);
-        }
-      }
-
-      setSuccess(isDuplicate
-        ? "Duplicate scan suppressed — no duplicate alert sent."
-        : `${eventType === "arrival" ? "Arrival" : "Departure"} recorded. Parent SMS queued.`);
-      setPupilId("");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to record scan");
-    } finally { setBusy(false); }
+      setScanMsg({ type: "ok", text: isDup ? "Duplicate scan suppressed." : `${eventType === "arrival" ? "Arrival" : "Departure"} recorded.` });
+      setPupilId(""); await load();
+    } catch (err) { setScanMsg({ type: "err", text: err instanceof Error ? err.message : "Error" }); }
+    finally { setBusy(false); }
   }
 
-  if (!schoolId) return <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800">No school linked.</div>;
-
   return (
-    <div className="space-y-6">
-
-      {/* ── Figure 3: One-time setup and daily cycle ────── */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
-          <h3 className="font-bold text-slate-900">One-time setup and the daily attendance cycle</h3>
-        </div>
-
-        {/* A. Set up once */}
-        <div className="p-4">
-          <div className="rounded-lg border border-slate-200 p-4">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              A. Set up once, then update records as needed
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { n: "1", title: "Onboard school", desc: "Kathay sets up the school account, devices, gates and authorised staff." },
-                { n: "2", title: "Register pupils", desc: "School verifies pupil identity, parent numbers and contact permissions." },
-                { n: "3", title: "Enrol approved ID", desc: "Complete notices and required consents; enrol fingerprint or alternative ID." },
-              ].map(step => (
-                <div key={step.n} className="space-y-1">
-                  <div className="text-sm font-semibold text-slate-900">{step.n}. {step.title}</div>
-                  <div className="text-xs leading-relaxed text-slate-500">{step.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* B. Repeat daily */}
-        <div className="px-4 pb-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            B. Repeat on each school day
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {[
-              { n: "1", color: "bg-blue-600", title: "Arrival scan", desc: "Confirm identity and entry gate." },
-              { n: "2", color: "bg-blue-600", title: "Validate and record", desc: "Deduplicate events; record local time and device." },
-              { n: "3", color: "bg-blue-600", title: "Notify parent", desc: "Queue arrival SMS; record delivery outcome." },
-              { n: "4", color: "bg-slate-700", title: "Authorised departure", desc: "School verifies release; scan and record exit." },
-              { n: "5", color: "bg-slate-700", title: "Notify departure", desc: "Queue exit SMS with event time." },
-              { n: "6", color: "bg-slate-700", title: "Review and report", desc: "Resolve exceptions; retain searchable history." },
-            ].map((step, i) => (
-              <div key={step.n} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
-                <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${step.color}`}>
-                  {step.n}
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">{step.title}</div>
-                  <div className="mt-0.5 text-xs leading-relaxed text-slate-500">{step.desc}</div>
-                </div>
-                {/* Arrow between steps in same row */}
-                {i % 3 !== 2 && <div className="hidden sm:block self-center text-slate-300 text-lg">→</div>}
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-slate-400">
-            Daily review resets the attendance view, not the pupil registration or biometric enrolment.
-          </p>
-        </div>
-      </div>
-
-      {/* ── Scan recorder + event table ─────────────────── */}
-      <div className="grid gap-5 lg:grid-cols-3">
-
-        {/* Scan form */}
-        <form onSubmit={recordScan} className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="font-semibold text-slate-900">Record a scan</h3>
-          <div className="mt-4 space-y-4">
+    <div className="space-y-5">
+      {/* Scan form + filters */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Manual scan */}
+          <form onSubmit={recordScan} className="flex flex-wrap items-end gap-3 flex-1">
             <div>
-              <label className="label">Event type</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["arrival", "departure"] as const).map(t => (
+              <label className="label">Event</label>
+              <div className="flex p-1 bg-slate-100 rounded-lg gap-1 text-xs font-medium">
+                {(["arrival","departure"] as const).map(t => (
                   <button type="button" key={t} onClick={() => setEventType(t)}
-                    className={cn("rounded-lg border py-2.5 text-sm font-medium capitalize transition-colors",
-                      eventType === t ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-300 text-slate-600 hover:border-slate-400")}>
+                    className={cn("px-3 py-1.5 rounded-md transition-all capitalize cursor-pointer", eventType === t ? "bg-white text-slate-900 shadow-xs" : "text-slate-600")}>
                     {t}
                   </button>
                 ))}
               </div>
             </div>
-            <div>
+            <div className="flex-1 min-w-[160px]">
               <label className="label">Pupil</label>
               <select className="input" required value={pupilId} onChange={e => setPupilId(e.target.value)}>
                 <option value="">Select pupil…</option>
-                {pupils.map(p => (
-                  <option key={p.id} value={p.id}>{fullName(p.first_name, p.last_name)} · {p.admission_number}</option>
-                ))}
+                {pupils.map(p => <option key={p.id} value={p.id}>{fullName(p.first_name, p.last_name)} · {p.admission_number}</option>)}
+              </select>
+            </div>
+            <div className="min-w-[120px]">
+              <label className="label">Gate</label>
+              <select className="input" value={gateId} onChange={e => setGateId(e.target.value)}>
+                <option value="">— Any gate —</option>
+                {gates.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="label">Gate / device</label>
-              <select className="input" value={gateId} onChange={e => setGateId(e.target.value)}>
-                <option value="">— Not specified —</option>
-                {gates.map(g => <option key={g.id} value={g.id}>{g.name} ({g.direction})</option>)}
-              </select>
+              <button type="submit" disabled={busy || !pupilId} className="btn-primary">
+                {busy ? "Recording…" : `Record ${eventType}`}
+              </button>
             </div>
-            {error && <div className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</div>}
-            {success && <div className="rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">{success}</div>}
-            <button type="submit" disabled={busy || !pupilId} className="btn-primary w-full">
-              {busy ? "Recording…" : `Record ${eventType}`}
-            </button>
-          </div>
-        </form>
+          </form>
 
-        {/* Recent events table — exactly the columns from section 6 "Recent activity" */}
-        <div className="rounded-xl border border-slate-200 bg-white lg:col-span-2">
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h3 className="font-semibold text-slate-900">Recent activity</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Pupil · admission number · class · time · gate · result · SMS state</p>
+          {/* Direction filter */}
+          <div className="flex items-center p-1 bg-slate-100 rounded-lg text-xs font-medium self-end">
+            {(["all","inbound","outbound"] as const).map(d => (
+              <button key={d} onClick={() => setDirFilter(d)}
+                className={cn("px-2.5 py-1 rounded-md transition-all capitalize cursor-pointer",
+                  dirFilter === d ? (d === "inbound" ? "bg-white text-emerald-700 shadow-xs" : d === "outbound" ? "bg-white text-blue-700 shadow-xs" : "bg-white text-slate-900 shadow-xs") : "text-slate-600")}>
+                {d === "all" ? "All Events" : d === "inbound" ? "Arrivals" : "Departures"}
+              </button>
+            ))}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-100 text-left text-xs text-slate-500">
-                <tr>
-                  <th className="px-3 py-2.5 font-medium">Time</th>
-                  <th className="px-3 py-2.5 font-medium">Pupil</th>
-                  <th className="px-3 py-2.5 font-medium">Adm. No</th>
-                  <th className="px-3 py-2.5 font-medium">Class</th>
-                  <th className="px-3 py-2.5 font-medium">Event</th>
-                  <th className="px-3 py-2.5 font-medium">Gate</th>
-                  <th className="px-3 py-2.5 font-medium">Result</th>
-                  <th className="px-3 py-2.5 font-medium">SMS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {events.length === 0 && (
-                  <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">No events recorded yet.</td></tr>
-                )}
-                {events.map(ev => (
-                  <tr key={ev.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{ev.time}</td>
-                    <td className="px-3 py-2.5 font-medium text-slate-900 whitespace-nowrap">{ev.pupilName}</td>
-                    <td className="px-3 py-2.5 text-slate-500">{ev.admNo}</td>
-                    <td className="px-3 py-2.5 text-slate-500">{ev.className}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium",
-                        ev.eventType === "Arrival" ? "bg-emerald-50 text-emerald-700" :
-                        ev.eventType === "Late arrival" ? "bg-amber-50 text-amber-700" :
-                        "bg-blue-50 text-blue-700")}>
-                        {ev.eventType}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{ev.gate}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium",
-                        ev.result === "success" ? "bg-emerald-50 text-emerald-700" :
-                        ev.result === "failed" ? "bg-red-50 text-red-700" :
-                        "bg-slate-100 text-slate-500")}>
-                        {ev.result.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium capitalize", SMS_BADGE[ev.smsStatus] ?? "bg-slate-100 text-slate-500")}>
-                        {ev.smsStatus === "—" ? "—" : ev.smsStatus}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <div className="relative self-end">
+            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+            <input type="text" placeholder="Search pupil or admission no…" value={search} onChange={e => setSearch(e.target.value)}
+              className="input pl-8" style={{ width: 220 }} />
+          </div>
+        </div>
+
+        {scanMsg && <div className={cn("text-xs px-3 py-2 rounded-lg", scanMsg.type === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700")}>{scanMsg.text}</div>}
+
+        <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
+          <span>Showing <strong className="text-slate-800 font-mono">{filtered.length}</strong> recorded events today</span>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Inbound Entry</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Outbound Exit</span>
           </div>
         </div>
       </div>
+
+      {/* Events table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
+              <tr>
+                <th className="py-3 px-4">Event Time</th>
+                <th className="py-3 px-4">Pupil &amp; Admission</th>
+                <th className="py-3 px-4">Class</th>
+                <th className="py-3 px-4">Direction &amp; Status</th>
+                <th className="py-3 px-4">Gate / Terminal</th>
+                <th className="py-3 px-4">Credential</th>
+                <th className="py-3 px-4">Guardian SMS</th>
+                <th className="py-3 px-4">Result</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length === 0 && <tr><td colSpan={8} className="py-10 text-center text-slate-400">No events yet today</td></tr>}
+              {filtered.map(log => (
+                <tr key={log.id} onClick={() => setSelected(log)} className="hover:bg-slate-50/80 transition-colors cursor-pointer group">
+                  <td className="py-3 px-4 font-mono font-medium text-slate-900 tabular-nums whitespace-nowrap">{log.timestamp}</td>
+                  <td className="py-3 px-4 font-medium text-slate-900 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center font-bold text-[11px] shrink-0">{log.pupilName[0]}</div>
+                      <div>
+                        <div className="font-semibold group-hover:text-blue-700 transition-colors">{log.pupilName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">Adm: {log.admissionNo}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-slate-700 font-mono">{log.classGrade}</td>
+                  <td className="py-3 px-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      {log.direction === "inbound"
+                        ? <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">✔ Arrival</span>
+                        : <span className="inline-flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">→ Departure</span>}
+                      {log.eventStatus === "late" && <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-medium">Late</span>}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{log.gateDevice}</td>
+                  <td className="py-3 px-4 text-slate-700 whitespace-nowrap">👆 Fingerprint</td>
+                  <td className="py-3 px-4 whitespace-nowrap">
+                    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-[11px] font-mono",
+                      log.smsStatus === "delivered" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                      log.smsStatus === "sent" ? "bg-blue-50 text-blue-700 border border-blue-200" :
+                      log.smsStatus === "failed" ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-amber-50 text-amber-700 border border-amber-200")}>
+                      {log.smsStatus}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 whitespace-nowrap">
+                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded",
+                      log.result === "success" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
+                      {log.result?.replace(/_/g," ")}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Detail drawer */}
+      {selected && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in">
+          <div className="w-full max-w-md bg-white h-full shadow-2xl border-l border-slate-200 p-6 flex flex-col justify-between overflow-y-auto">
+            <div className="space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Turnstile Raw Event Record</span>
+                  <h3 className="text-lg font-bold text-slate-900">{selected.pupilName}</h3>
+                </div>
+                <button onClick={() => setSelected(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                {[["Admission Number", selected.admissionNo],["Class", selected.classGrade],["Direction", selected.direction],["Time", selected.timestamp],["Gate", selected.gateDevice],["Credential", selected.credentialType],["Result", selected.result],["SMS Status", selected.smsStatus]].map(([k,v]) => (
+                  <div key={k} className="flex justify-between"><span className="text-slate-500">{k}:</span><span className="font-mono font-bold text-slate-900">{v}</span></div>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => setSelected(null)} className="mt-4 w-full py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl">Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

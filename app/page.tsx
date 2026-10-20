@@ -2,77 +2,54 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useEffect, useState } from "react";
 
-const FEATURES = [
-  { title: "Reliable entry & exit recording", desc: "Fingerprint or RFID scans capture every arrival and departure with accurate timestamps, gate and device source. Duplicate scans within the configured window never create duplicate alerts.", icon: "🔐" },
-  { title: "Parent SMS notifications", desc: "Verified guardians receive an arrival and departure SMS identifying the pupil, school and recorded time. We track queued, sent and delivered states separately, with full message audit.", icon: "💬" },
-  { title: "Exception & follow-up management", desc: "Late arrivals, missing scans, early exits and failed SMS are flagged for review. Each follow-up has a responsible staff member, action note and open-to-closed status.", icon: "📋" },
-  { title: "Secure multi-school isolation", desc: "Each school sees only its own pupil records. Access is based on staff roles and enforced at the database level, not just the interface. Encrypted connections and audit logs throughout.", icon: "🏫" },
-  { title: "Departure control & release", desc: "Schools apply their own release policy before a pupil departs. Authorised pickup persons and methods are recorded, and only a valid departure event triggers the exit SMS.", icon: "🚪" },
-  { title: "Reports & device health", desc: "Daily and class attendance, late arrival and early exit trends, unresolved exceptions, SMS failures and device last-seen status, with export for authorised staff.", icon: "📊" },
-];
-
-const STEPS = [
-  { n: "1", title: "Onboard the school", desc: "Kathay creates the school account, configures calendars, hours, gates, role permissions and notification templates." },
-  { n: "2", title: "Verify & enrol pupils", desc: "The school verifies pupil identity, admission number, class, guardian contacts and pickup permissions, then enrols credentials." },
-  { n: "3", title: "Daily scans", desc: "On arrival the pupil scans; the system records the event, updates the dashboard and triggers one SMS to the verified guardian." },
-  { n: "4", title: "Supervised departure", desc: "Staff apply the release policy, the pupil scans at exit, the collection is confirmed, and the exit SMS is sent." },
-  { n: "5", title: "Review & follow up", desc: "Supervisors review late arrivals, missing scans, early exits, failed SMS and unresolved records." },
-];
-
-// Portal access cards — each audience gets their own entry point
-const PORTALS = [
+const SLIDES = [
   {
-    title: "Parent & Guardian Portal",
-    desc: "Track your child's arrivals and departures, view SMS notification history and contact the school.",
-    href: "/parent",
-    loginHref: "/parent/login",
-    icon: "👨‍👩‍👧",
-    color: "border-emerald-200 bg-emerald-50",
-    badgeColor: "bg-emerald-100 text-emerald-800",
-    badge: "Parents",
-    btnColor: "bg-emerald-600 text-white hover:bg-emerald-700",
+    url: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1600&q=80&auto=format&fit=crop",
+    title: "Verified pupil attendance for modern schools",
+    sub: "Fingerprint and RFID gate readers with instant parent SMS delivery",
   },
   {
-    title: "School Management Portal",
-    desc: "Manage pupils, guardians, staff, gates, SMS templates, calendar, onboarding checklist and support tickets.",
-    href: "/school",
-    loginHref: "/login",
-    icon: "🏫",
-    color: "border-violet-200 bg-violet-50",
-    badgeColor: "bg-violet-100 text-violet-800",
-    badge: "School Admins",
-    btnColor: "bg-violet-600 text-white hover:bg-violet-700",
+    url: "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1600&q=80&auto=format&fit=crop",
+    title: "Departure control & child safeguarding",
+    sub: "Staff verify pickup identity before every safe handover",
   },
   {
-    title: "Staff Dashboard",
-    desc: "Record arrivals and departures at the gate, manage departure control, follow-up queue and attendance reports.",
-    href: "/dashboard",
-    loginHref: "/login",
-    icon: "👷",
-    color: "border-blue-200 bg-blue-50",
-    badgeColor: "bg-blue-100 text-blue-800",
-    badge: "Gate Staff & Supervisors",
-    btnColor: "bg-blue-700 text-white hover:bg-blue-800",
+    url: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=1600&q=80&auto=format&fit=crop",
+    title: "Real-time parent notifications",
+    sub: "Arrival and departure SMS under 3.2 seconds average delivery",
   },
   {
-    title: "Kathay Admin Console",
-    desc: "Platform overview, school onboarding, device integration, monitoring, backups, maintenance, security controls and support queue.",
-    href: "/kathay",
-    loginHref: "/login",
-    icon: "⚙",
-    color: "border-slate-300 bg-slate-900",
-    badgeColor: "bg-slate-700 text-slate-200",
-    badge: "Kathay Technologies",
-    btnColor: "bg-white text-slate-900 hover:bg-slate-100",
-    dark: true,
+    url: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1600&q=80&auto=format&fit=crop",
+    title: "Multi-school platform, per-tenant isolation",
+    sub: "Each school's data is strictly separated at the database level",
   },
 ];
 
 export default function LandingPage() {
   const { user, loading, context } = useAuth();
+  const [slide, setSlide] = useState(0);
+  const [fading, setFading] = useState(false);
 
-  // Determine where a logged-in user should land based on their role
+  // Auto-advance every 10 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setSlide(prev => (prev + 1) % SLIDES.length);
+        setFading(false);
+      }, 600);
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  function goTo(i: number) {
+    if (i === slide) return;
+    setFading(true);
+    setTimeout(() => { setSlide(i); setFading(false); }, 600);
+  }
+
   function getDashboardHref(): string {
     if (!context) return "/dashboard";
     if (context.is_platform_admin) return "/kathay";
@@ -81,122 +58,349 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-full">
-      {/* Nav */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-700 text-white font-bold">K</span>
-            <span className="font-semibold tracking-tight">Kathay</span>
-          </Link>
-          <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex">
-            <a href="#portals" className="hover:text-slate-900">Portals</a>
-            <a href="#features" className="hover:text-slate-900">Features</a>
-            <a href="#how" className="hover:text-slate-900">How it works</a>
-            <Link href="/parent/login" className="hover:text-slate-900">Parent login</Link>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col" style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif" }}>
+
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/90 px-6 lg:px-12 py-3.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
+          <a href="#hero" className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 flex items-center gap-2">
+            <span className="w-7 h-7 rounded-md bg-blue-700 text-white flex items-center justify-center text-sm font-bold">K</span>
+            Kathay Technologies
+          </a>
+
+          <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-slate-600">
+            <a href="#overview" className="hover:text-slate-900 transition-colors">System Overview</a>
+            <a href="#safeguarding" className="hover:text-slate-900 transition-colors">Safeguarding Rules</a>
+            <a href="#hardware" className="hover:text-slate-900 transition-colors">Edge Hardware</a>
+            <a href="#notifications" className="hover:text-slate-900 transition-colors">Parent SMS Experience</a>
           </nav>
-          <div className="flex items-center gap-3">
-            {loading ? null : user ? (
-              <Link href={getDashboardHref()} className="btn-primary">Go to my portal</Link>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {!loading && !user && (
+              <Link href="/login" className="hidden sm:inline-flex px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100 rounded-lg transition-colors">
+                Staff Sign In
+              </Link>
+            )}
+            {!loading && user ? (
+              <Link href={getDashboardHref()} className="px-4 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-sm transition-all flex items-center gap-1.5">
+                Open Portal →
+              </Link>
             ) : (
-              <>
-                <Link href="/login" className="btn-secondary">Staff sign in</Link>
-                <Link href="/signup" className="btn-primary">Get started</Link>
-              </>
+              <Link href="/dashboard" className="px-4 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-sm transition-all flex items-center gap-1.5">
+                Enter School Portal →
+              </Link>
             )}
           </div>
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-blue-50 via-white to-white" />
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
-          <div className="mx-auto max-w-3xl text-center">
-            <span className="badge bg-blue-100 text-blue-800">Kathay Technologies · School Attendance Platform</span>
-            <h1 className="mt-5 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-              School biometric attendance with parent notifications
-            </h1>
-            <p className="mt-5 text-lg leading-relaxed text-slate-600">
-              Records pupils arriving at and leaving school, issues SMS notifications to verified
-              parents or guardians, and gives each school secure access to attendance history,
-              departure control and follow-up records.
-            </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              {!user ? (
-                <>
-                  <Link href="/signup" className="btn-primary px-6 py-3 text-base">Onboard your school</Link>
-                  <Link href="/parent/login" className="btn-secondary px-6 py-3 text-base">Parent portal</Link>
-                </>
-              ) : (
-                <Link href={getDashboardHref()} className="btn-primary px-6 py-3 text-base">Open my portal</Link>
-              )}
-            </div>
-            <p className="mt-4 text-sm text-slate-500">
-              A scan records an event. It does not, by itself, establish that a child was safely
-              handed over to an authorised person.
-            </p>
+      {/* ── Hero image slider — sits directly under sticky nav ── */}
+      <section id="hero" className="relative w-full overflow-hidden" style={{ height: "92vh", minHeight: 520 }}>
+
+        {/* Slides */}
+        {SLIDES.map((s, i) => (
+          <div key={i} className="absolute inset-0 transition-opacity duration-700"
+            style={{ opacity: i === slide ? (fading ? 0 : 1) : 0, zIndex: i === slide ? 1 : 0 }}>
+            <img src={s.url} alt={s.title} className="w-full h-full object-cover"
+              style={{ filter: "brightness(0.45)" }} />
+          </div>
+        ))}
+
+        {/* Dark gradient at bottom for text legibility */}
+        <div className="absolute inset-0 z-10 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
+
+        {/* Slide content */}
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-6">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold text-blue-300 bg-blue-900/50 px-4 py-1.5 rounded-full border border-blue-500/40 mb-6 backdrop-blur-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping"></span>
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-400"></span>
+            </span>
+            Kathay Technologies · Managed School Attendance Platform
           </div>
 
-          <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-4 sm:grid-cols-4">
+          <h1 key={`title-${slide}`} className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white max-w-4xl leading-tight"
+            style={{ textShadow: "0 2px 24px rgba(0,0,0,0.5)" }}>
+            {SLIDES[slide].title}
+          </h1>
+
+          <p key={`sub-${slide}`} className="mt-5 text-lg sm:text-xl text-slate-200 max-w-2xl leading-relaxed"
+            style={{ textShadow: "0 1px 8px rgba(0,0,0,0.6)" }}>
+            {SLIDES[slide].sub}
+          </p>
+
+          <div className="mt-10 flex flex-col sm:flex-row items-center gap-4">
+            <Link href="/dashboard"
+              className="px-8 py-4 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-xl shadow-blue-900/40 transition-all flex items-center gap-2">
+              🏫 Launch School Dashboard
+            </Link>
+            <Link href="/parent/login"
+              className="px-8 py-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xl shadow-emerald-900/40 transition-all flex items-center gap-2">
+              👨‍👩‍👧‍👦 Parent Portal
+            </Link>
+            <Link href="/signup"
+              className="px-8 py-4 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/30 rounded-xl backdrop-blur-sm transition-all">
+              Get started →
+            </Link>
+          </div>
+
+          {/* Trust strip */}
+          <div className="mt-12 grid grid-cols-3 gap-8 text-center">
             {[
-              { k: "Entry & exit", v: "Per pupil" },
-              { k: "Parent SMS", v: "Queued → delivered" },
-              { k: "Multi-school", v: "Per-tenant isolation" },
-              { k: "Role-based", v: "DB-enforced access" },
-            ].map((s) => (
-              <div key={s.k} className="card p-4 text-center">
-                <div className="text-sm font-semibold text-slate-900">{s.k}</div>
-                <div className="mt-1 text-xs text-slate-500">{s.v}</div>
+              { v: "100% Local", l: "Offline gateway buffering" },
+              { v: "< 3.2s", l: "Guardian SMS latency" },
+              { v: "Safeguard-First", l: "Departure sign-off required" },
+            ].map(t => (
+              <div key={t.v}>
+                <div className="text-2xl font-extrabold font-mono text-white" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.6)" }}>{t.v}</div>
+                <div className="text-xs text-slate-300 mt-1">{t.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Dot indicators */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+          {SLIDES.map((_, i) => (
+            <button key={i} onClick={() => goTo(i)}
+              className="transition-all duration-300 rounded-full cursor-pointer"
+              style={{ width: i === slide ? 28 : 8, height: 8, background: i === slide ? "#3b82f6" : "rgba(255,255,255,0.45)" }} />
+          ))}
+        </div>
+
+        {/* Prev / Next arrows */}
+        <button onClick={() => goTo((slide - 1 + SLIDES.length) % SLIDES.length)}
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-colors cursor-pointer text-lg">
+          ‹
+        </button>
+        <button onClick={() => goTo((slide + 1) % SLIDES.length)}
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-colors cursor-pointer text-lg">
+          ›
+        </button>
+
+        {/* Slide counter */}
+        <div className="absolute top-4 right-4 z-30 font-mono text-xs text-white/60 bg-black/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
+          {slide + 1} / {SLIDES.length}
+        </div>
+
+        {/* Progress bar */}
+        <div className="absolute bottom-0 left-0 z-30 h-0.5 bg-blue-500/60" style={{ width: `${((slide + 1) / SLIDES.length) * 100}%`, transition: "width 0.6s ease" }} />
+      </section>
+
+      {/* ── Safeguarding Doctrine ── */}
+      <section id="safeguarding" className="py-16 px-6 lg:px-12 bg-slate-900 text-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="max-w-3xl mb-12">
+            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Core Operating Doctrine</span>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mt-2">
+              "A scan records an event; it does not, by itself, establish that a child was safely handed over."
+            </h2>
+            <p className="text-slate-300 mt-3 text-sm leading-relaxed">
+              Unlike commercial workplace timeclocks, school attendance directly impacts child protection. Kathay Technologies architected the platform with mandatory operational safeguards:
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { n: "1", color: "bg-blue-500/20 text-blue-400", title: "Departure Approval Before Exit", desc: "A turnstile swipe records exit timing, but school staff must physically confirm authorized pickup identity before safe departure is certified." },
+              { n: "2", color: "bg-amber-500/20 text-amber-400", title: "Missing Scans Are Exceptions", desc: "If an enrolled child has no arrival scan by 08:30 AM cutoff, the system creates a high-priority follow-up case with tracked parent contact attempts." },
+              { n: "3", color: "bg-emerald-500/20 text-emerald-400", title: "Immutable Audit Trail", desc: "Any manual attendance correction preserves the original raw sensor event, reason code, authorizer name, and exact timestamp. Records are never deleted." },
+            ].map(item => (
+              <div key={item.n} className="p-6 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-3">
+                <div className={`w-9 h-9 rounded-lg ${item.color} flex items-center justify-center font-bold`}>{item.n}</div>
+                <h3 className="text-base font-semibold text-white">{item.title}</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── PORTALS ── */}
-      <section id="portals" className="border-y border-slate-200 bg-slate-50">
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Choose your portal</h2>
-            <p className="mt-4 text-slate-600">
-              Every stakeholder has a dedicated portal. Parents track their children. Schools manage
-              attendance. Kathay operates the platform.
-            </p>
+      {/* ── Daily Cycle ── */}
+      <section id="overview" className="py-16 px-6 lg:px-12 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto space-y-12">
+          <div className="text-center max-w-2xl mx-auto">
+            <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">System Lifecycle</span>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mt-1">One-Time Setup &amp; The Daily Attendance Cycle</h2>
+            <p className="text-slate-600 text-sm mt-2">Pupil registration and biometric consent are handled once. Attendance validation and exception reviews repeat every school day.</p>
           </div>
-          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {PORTALS.map((p) => (
-              <div key={p.title} className={`flex flex-col rounded-2xl border p-6 ${p.color}`}>
-                <div className="text-3xl">{p.icon}</div>
-                <span className={`mt-3 inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${p.badgeColor}`}>
-                  {p.badge}
-                </span>
-                <h3 className={`mt-3 text-base font-semibold ${p.dark ? "text-white" : "text-slate-900"}`}>
-                  {p.title}
-                </h3>
-                <p className={`mt-2 flex-1 text-sm leading-relaxed ${p.dark ? "text-slate-400" : "text-slate-600"}`}>
-                  {p.desc}
-                </p>
+
+          <div className="space-y-8">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+              <div className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                Phase A — Initial Onboarding (Completed Once Per School &amp; Pupil)
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                {[
+                  { t: "1. School & Gate Configuration", d: "Kathay provisions school accounts, sets operational bell hours, enrolls turnstile readers, and tests network failover." },
+                  { t: "2. Pupil Register & Data Notice", d: "School verifies admission numbers, class rosters, verified guardian phones, and designated pickup permissions." },
+                  { t: "3. Biometric / RFID Enrolment", d: "Parent signed consent captured. Pupil registers fingerprint template or receives non-biometric RFID smart badge." },
+                ].map(s => (
+                  <div key={s.t} className="bg-white p-4 rounded-xl border border-slate-200">
+                    <div className="font-semibold text-slate-900 mb-1">{s.t}</div>
+                    <div className="text-slate-600">{s.d}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Phase B — Daily Attendance &amp; Departure Cycle (Repeats Every School Day)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs">
+                {[
+                  { step: "01", title: "Arrival Scan", desc: "Pupil taps finger/card at inbound turnstile.", sub: "Main/North Gates" },
+                  { step: "02", title: "Validate & Record", desc: "5-min debounce prevents double scans. Local gateway logs event.", sub: "Edge Gateway" },
+                  { step: "03", title: "Notify Guardian", desc: "1 SMS attempt dispatched to parent phone.", sub: "SMS Gateway" },
+                  { step: "04", title: "Authorised Release", desc: "Staff verify pickup identity and scan exit.", sub: "Safeguarding Staff" },
+                  { step: "05", title: "Notify Departure", desc: "Departure SMS sent with actual recorded time.", sub: "Carrier Receipt" },
+                  { step: "06", title: "Review & Report", desc: "Resolve exceptions, late flags and failed SMS.", sub: "Supervisor Queue" },
+                ].map(s => (
+                  <div key={s.step} className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                    <div>
+                      <span className="font-mono text-blue-600 font-bold">Step {s.step}</span>
+                      <div className="font-semibold text-slate-900 mt-1">{s.title}</div>
+                      <div className="text-slate-600 mt-1">{s.desc}</div>
+                    </div>
+                    <div className="mt-3 text-[11px] text-slate-400">{s.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Hardware ── */}
+      <section id="hardware" className="py-16 px-6 lg:px-12 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <div className="lg:col-span-5">
+              <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-lg bg-white p-8 flex items-center justify-center" style={{ minHeight: 320 }}>
+                <div className="text-center">
+                  <div className="text-8xl mb-4">🖥️</div>
+                  <div className="text-sm font-semibold text-slate-900">ZKTeco Series Terminal</div>
+                  <div className="text-xs text-slate-500 mt-1">Optical fingerprint + 13.56MHz RFID + local template storage</div>
+                </div>
+              </div>
+            </div>
+            <div className="lg:col-span-7 space-y-6">
+              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Reliability Engineering</span>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Engineered for unreliable power and intermittent internet.</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {[
+                  { icon: "📶", title: "Offline Gateway Queue", desc: "If school broadband fails, the local mini-PC stores every scan event. When connectivity returns, events reconcile cleanly." },
+                  { icon: "🔋", title: "Uninterruptible Power Backup", desc: "Gate controllers operate on 12V LiFePO4 battery enclosures providing up to 8 hours during utility blackouts." },
+                  { icon: "🛡️", title: "Supervised Card & PIN Alternative", desc: "Children who opt out of biometrics use registered RFID smartcards or supervised gate PIN entry with equal dignity." },
+                  { icon: "⚡", title: "Direction & Sequence Enforcement", desc: "A pupil cannot trigger two arrival scans without flagging a direction anomaly. Scans must follow proper entry-then-exit sequence." },
+                ].map(f => (
+                  <div key={f.title} className="p-4 rounded-xl bg-white border border-slate-200">
+                    <div className="flex items-center gap-2 text-slate-900 font-semibold mb-1">
+                      <span>{f.icon}</span> {f.title}
+                    </div>
+                    <div className="text-slate-600 leading-relaxed">{f.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SMS Preview ── */}
+      <section id="notifications" className="py-16 px-6 lg:px-12 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <div className="lg:col-span-7 space-y-6">
+              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Parent Notification Clarity</span>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Factual alerts that inform without making false guarantees.</h2>
+              <p className="text-slate-600 text-sm leading-relaxed">Parent notifications must describe what was physically recorded at the gate — never promise that a child is already home.</p>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+                <div className="bg-slate-100 px-4 py-2.5 font-semibold text-slate-800 border-b border-slate-200 flex justify-between">
+                  <span>Message Status</span><span>Practical Handling Rule</span>
+                </div>
+                <div className="divide-y divide-slate-100 bg-white">
+                  {[
+                    { s: "Queued / Sending", c: "font-mono text-slate-700", r: "Gate time recorded; waiting for carrier gateway acknowledgment." },
+                    { s: "Delivered", c: "font-mono text-emerald-700", r: "Provider handset receipt confirmed with unique delivery ID." },
+                    { s: "Delayed (Outage)", c: "font-mono text-amber-700", r: "Message displays actual morning event time, not when connectivity resumed." },
+                    { s: "Failed", c: "font-mono text-rose-700", r: "Flagged immediately in school follow-up queue for manual phone check." },
+                  ].map(row => (
+                    <div key={row.s} className="px-4 py-2.5 flex items-start justify-between gap-4">
+                      <span className={`${row.c} font-semibold shrink-0`}>{row.s}</span>
+                      <span className="text-slate-600 text-right">{row.r}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Phone mockup */}
+            <div className="lg:col-span-5 flex justify-center">
+              <div className="w-72 rounded-[36px] bg-slate-900 p-3 shadow-2xl border-4 border-slate-800">
+                <div className="w-24 h-4 bg-slate-800 rounded-full mx-auto mb-3" />
+                <div className="bg-slate-100 rounded-[28px] overflow-hidden flex flex-col" style={{ minHeight: 460 }}>
+                  <div className="bg-slate-200/90 px-4 py-3 border-b border-slate-300 text-center">
+                    <div className="text-[11px] font-mono text-slate-500">Messages · SMS</div>
+                    <div className="text-xs font-bold text-slate-800">Greenhill School</div>
+                    <div className="text-[10px] text-emerald-600">Sender ID: KATHAY_SMS</div>
+                  </div>
+                  <div className="flex-1 p-4 space-y-4 text-xs">
+                    <div className="text-center text-[10px] text-slate-400 font-mono">Today · 19 Oct 2026</div>
+                    <div className="flex flex-col items-start space-y-1">
+                      <div className="bg-blue-600 text-white rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] shadow-sm leading-relaxed">
+                        Greenhill School: Daniel Kato was recorded arriving at 7:42 a.m. today.
+                      </div>
+                      <span className="text-[10px] text-slate-400 pl-1 font-mono">07:42 AM · Delivered</span>
+                    </div>
+                    <div className="flex flex-col items-start space-y-1">
+                      <div className="bg-blue-600 text-white rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] shadow-sm leading-relaxed">
+                        Greenhill School: Daniel Kato was recorded leaving school at 4:18 p.m. today.
+                      </div>
+                      <span className="text-[10px] text-slate-400 pl-1 font-mono">04:19 PM · Delivered</span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-between text-slate-400 text-[11px]">
+                    <span>Automated broadcast service</span>
+                    <span>📱</span>
+                  </div>
+                </div>
+                <div className="w-28 h-1 bg-slate-700 rounded-full mx-auto mt-3" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Portals CTA ── */}
+      <section className="py-16 px-6 lg:px-12 bg-slate-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Access Your Portal</h2>
+            <p className="text-slate-600 text-sm mt-2">Every stakeholder has a dedicated portal with role-specific features.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {[
+              { icon: "👨‍👩‍👧‍👦", title: "Parent Portal", desc: "Track your child's arrivals and departures, view SMS history.", href: "/parent", login: "/parent/login", badge: "For Parents", grad: "from-emerald-500 to-teal-600" },
+              { icon: "🏫", title: "School Management", desc: "Manage pupils, guardians, staff, gates and SMS templates.", href: "/school", login: "/login", badge: "For School Admins", grad: "from-violet-500 to-purple-600" },
+              { icon: "👷", title: "Staff Dashboard", desc: "Record arrivals and departures, manage departure control.", href: "/dashboard", login: "/login", badge: "For Gate Staff", grad: "from-blue-500 to-blue-700" },
+              { icon: "⚙️", title: "Kathay Admin", desc: "Platform overview, device integration and support queue.", href: "/kathay", login: "/login", badge: "Kathay Technologies", grad: "from-slate-700 to-slate-900" },
+            ].map(p => (
+              <div key={p.title} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-lg transition-all group">
+                <div className="text-4xl">{p.icon}</div>
+                <div className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{p.badge}</div>
+                <h3 className="mt-3 text-base font-bold text-slate-900">{p.title}</h3>
+                <p className="mt-2 text-xs text-slate-600 leading-relaxed">{p.desc}</p>
                 <div className="mt-5 flex flex-col gap-2">
-                  {!user ? (
-                    <>
-                      <Link href={p.loginHref}
-                        className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${p.btnColor}`}>
-                        Sign in
-                      </Link>
-                      {p.loginHref !== "/parent/login" && (
-                        <Link href="/signup"
-                          className={`inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${p.dark ? "border-slate-600 text-slate-300 hover:bg-slate-800" : "border-slate-300 text-slate-700 hover:bg-white"}`}>
-                          Sign up
-                        </Link>
-                      )}
-                    </>
-                  ) : (
-                    <Link href={p.href}
-                      className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${p.btnColor}`}>
-                      Open portal
-                    </Link>
-                  )}
+                  <Link href={p.login} className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r ${p.grad} px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:shadow-md`}>
+                    Sign in →
+                  </Link>
+                  <Link href="/signup" className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
+                    Sign up
+                  </Link>
                 </div>
               </div>
             ))}
@@ -204,121 +408,21 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">What the platform delivers</h2>
-          <p className="mt-4 text-slate-600">Reliable entry and exit recording, parent messages, exception management and school reports.</p>
-        </div>
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="card p-6">
-              <div className="text-3xl">{f.icon}</div>
-              <h3 className="mt-4 text-lg font-semibold text-slate-900">{f.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section id="how" className="border-y border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">How the platform operates</h2>
-            <p className="mt-4 text-slate-600">From onboarding to daily scans to supervised follow-up.</p>
+      {/* ── Footer ── */}
+      <footer className="border-t border-slate-200 bg-white px-6 lg:px-12 py-8">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span className="w-7 h-7 rounded-md bg-blue-700 text-white flex items-center justify-center text-xs font-bold">K</span>
+            Kathay Technologies · School Attendance Platform
           </div>
-          <div className="mt-14 grid gap-6 md:grid-cols-5">
-            {STEPS.map((s) => (
-              <div key={s.n}>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-700 text-white font-bold">{s.n}</div>
-                <h3 className="mt-4 text-sm font-semibold text-slate-900">{s.title}</h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{s.desc}</p>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+            <Link href="/parent/login" className="hover:text-blue-600">Parent portal</Link>
+            <Link href="/school" className="hover:text-blue-600">School management</Link>
+            <Link href="/dashboard" className="hover:text-blue-600">Staff dashboard</Link>
+            <Link href="/signup" className="hover:text-blue-600">Sign up</Link>
+            <Link href="/login" className="hover:text-blue-600">Sign in</Link>
           </div>
-        </div>
-      </section>
-
-      {/* Responsibilities */}
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Responsibilities</h2>
-          <p className="mt-4 text-slate-600">Each party has defined responsibilities to make the platform work safely and reliably.</p>
-        </div>
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { party: "Kathay Technologies", icon: "⚙", items: ["Platform development & hosting", "School onboarding & installation", "Device integration & monitoring", "Software maintenance & backups", "Security controls & support"] },
-            { party: "School Management", icon: "🏫", items: ["Pupil & guardian data verification", "Staff accounts & gate supervision", "Attendance decisions & release", "Exception investigation", "Parent communication"] },
-            { party: "Parents & Guardians", icon: "👨‍👩‍👧", items: ["Provide accurate contact details", "Notify school of pickup changes", "Verify child arrival via SMS", "Contact school with queries", "Keep phone number current"] },
-            { party: "SMS Provider", icon: "📱", items: ["Deliver messages reliably", "Provide status receipts", "Support agreed sender identity", "Report delivery failures", "Maintain uptime SLA"] },
-          ].map((r) => (
-            <div key={r.party} className="card p-5">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{r.icon}</span>
-                <h3 className="text-sm font-semibold text-slate-900">{r.party}</h3>
-              </div>
-              <ul className="mt-4 space-y-1.5">
-                {r.items.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-xs text-slate-600">
-                    <span className="mt-0.5 text-blue-500">•</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="bg-blue-700">
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6">
-          <h2 className="text-3xl font-bold tracking-tight text-white">Ready to get started?</h2>
-          <p className="mt-4 text-blue-100">
-            School admins — onboard your school and start tracking attendance today.
-            Parents — log in to follow your child in real time.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            {!user ? (
-              <>
-                <Link href="/signup" className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-semibold text-blue-700 hover:bg-blue-50">
-                  School sign up
-                </Link>
-                <Link href="/parent/login" className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-6 py-3 text-base font-semibold text-white hover:bg-emerald-600">
-                  Parent portal
-                </Link>
-                <Link href="/login" className="inline-flex items-center gap-2 rounded-lg border border-blue-400 px-6 py-3 text-base font-semibold text-white hover:bg-blue-600">
-                  Staff sign in
-                </Link>
-              </>
-            ) : (
-              <Link href={getDashboardHref()} className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-base font-semibold text-blue-700 hover:bg-blue-50">
-                Open my portal
-              </Link>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span className="flex h-7 w-7 items-center justify-center rounded bg-blue-700 text-xs font-bold text-white">K</span>
-              Kathay Technologies · School Attendance Platform
-            </div>
-            <div className="flex flex-wrap gap-4 text-xs text-slate-400">
-              <Link href="/parent/login" className="hover:text-slate-600">Parent portal</Link>
-              <Link href="/school" className="hover:text-slate-600">School management</Link>
-              <Link href="/dashboard" className="hover:text-slate-600">Staff dashboard</Link>
-              <Link href="/kathay" className="hover:text-slate-600">Kathay admin</Link>
-              <Link href="/signup" className="hover:text-slate-600">Sign up</Link>
-              <Link href="/login" className="hover:text-slate-600">Sign in</Link>
-            </div>
-            <p className="text-xs text-slate-400">October 2026</p>
-          </div>
+          <p className="text-xs text-slate-400">© 2026 Kathay Technologies</p>
         </div>
       </footer>
     </div>

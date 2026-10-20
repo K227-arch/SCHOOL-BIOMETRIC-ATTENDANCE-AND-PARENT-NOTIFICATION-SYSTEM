@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { AuthFormSkeleton } from "@/components/PageSkeleton";
 
 export default function ParentLoginPage() {
   const router = useRouter();
-  const { signIn, signUp, verifyEmail } = useAuth();
+  const { signIn, signUp, verifyEmail, loading: authLoading } = useAuth();
+  if (authLoading) return <AuthFormSkeleton />;
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [step, setStep] = useState<"form" | "verify">("form");
