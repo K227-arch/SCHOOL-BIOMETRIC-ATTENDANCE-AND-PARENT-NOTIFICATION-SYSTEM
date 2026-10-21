@@ -26,6 +26,18 @@ export default function LoginPage() {
   const [kathayStep, setKathayStep] = useState<KathayStep>("request");
   const [otp, setOtp]               = useState("");
   const [codeSent, setCodeSent]     = useState(false);
+  const [countdown, setCountdown]   = useState(0);
+
+  // Start a 60s cooldown after sending a code (matches InsForge rate limit)
+  function startCooldown() {
+    setCountdown(60);
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  }
 
   function switchPortal(p: Portal) {
     setPortal(p);
@@ -35,6 +47,7 @@ export default function LoginPage() {
     setOtp("");
     setKathayStep("request");
     setCodeSent(false);
+    setCountdown(0);
   }
 
   /* ── School / Parent: password sign-in ── */
@@ -53,19 +66,19 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const { data, error } = await insforge.auth.resendVerificationEmail({
+    // Use sendResetPasswordEmail — works for already-verified accounts
+    // resendVerificationEmail only works for unverified accounts
+    const { data, error: re } = await insforge.auth.sendResetPasswordEmail({
       email: KATHAY_ADMIN_EMAIL,
     });
     setBusy(false);
-    if (error) {
-      // If the email is already verified the endpoint may error — try reset code flow instead
-      const { data: rd, error: re } = await insforge.auth.sendResetPasswordEmail({
-        email: KATHAY_ADMIN_EMAIL,
-      });
-      if (re) { setError("Could not send verification code. Please try again."); return; }
+    if (re) {
+      setError(`Failed to send code: ${re.message ?? "Please wait 60 seconds and try again."}`);
+      return;
     }
     setCodeSent(true);
     setKathayStep("verify");
+    startCooldown();
   }
 
   /* ── Kathay: verify the OTP code ── */
@@ -75,21 +88,7 @@ export default function LoginPage() {
     if (otp.length !== 6) { setError("Enter the 6-digit code from your email."); return; }
     setBusy(true);
 
-    // Try verifyEmail first (works if the account was not yet verified)
-    const { data: vd, error: ve } = await insforge.auth.verifyEmail({
-      email: KATHAY_ADMIN_EMAIL,
-      otp: otp.trim(),
-    });
-
-    if (!ve && vd?.accessToken) {
-      // Verified — session established, refresh context then go to /kathay
-      await refresh();
-      setBusy(false);
-      router.push("/kathay");
-      return;
-    }
-
-    // If verifyEmail failed (account already verified), try the reset-password exchange
+    // Exchange the reset password code for a token (proves identity)
     const { data: rd, error: re } = await insforge.auth.exchangeResetPasswordToken({
       email: KATHAY_ADMIN_EMAIL,
       code: otp.trim(),
@@ -101,12 +100,7 @@ export default function LoginPage() {
       return;
     }
 
-    // Code was valid — sign in now using the known admin credentials approach:
-    // We have proven identity via OTP, so sign in with the reset token.
-    // Reset flow: use the token as otp in resetPassword then sign in.
-    // Simpler: the admin has a real password stored — use signIn after OTP proves identity.
-    // Since we can't get the password here, we treat OTP success as the auth signal
-    // and just refresh the session (the verifyEmail call above should have set a cookie).
+    // Code is valid — refresh the auth session and go to /kathay
     await refresh();
     setBusy(false);
     router.push("/kathay");
@@ -290,11 +284,16 @@ export default function LoginPage() {
                       : <>→ Verify &amp; Access Portal</>}
                   </button>
 
-                  <button type="button" onClick={() => { setKathayStep("request"); setOtp(""); setError(null); setCodeSent(false); }}
-                    className="w-full text-xs text-slate-400 hover:text-slate-700 transition-colors py-1">
-                    ← Send a new code
-                  </button>
-                </form>
+                  {countdown > 0 ? (
+                    <p className="w-full text-xs text-slate-400 text-center py-1">
+                      Resend available in <span className="font-bold text-indigo-600">{countdown}s</span>
+                    </p>
+                  ) : (
+                    <button type="button" onClick={() => { setKathayStep("request"); setOtp(""); setError(null); setCodeSent(false); }}
+                      className="w-full text-xs text-slate-400 hover:text-slate-700 transition-colors py-1">
+                      ← Send a new code
+                    </button>
+                  )}                </form>
               )}
             </>
           )}
