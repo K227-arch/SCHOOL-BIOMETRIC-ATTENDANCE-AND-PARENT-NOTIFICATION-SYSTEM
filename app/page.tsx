@@ -4,27 +4,51 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
 
+/* ── Hero slides ──────────────────────────────────────────────────────────── */
 const SLIDES = [
   {
     url: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1600&q=80&auto=format&fit=crop",
-    title: "Verified pupil attendance for modern schools",
-    sub: "Fingerprint and RFID gate readers with instant parent SMS delivery",
+    eyebrow: "For school administrators",
+    headline: "Know exactly who is in your school, right now.",
+    sub: "Every arrival and departure is recorded automatically. No registers, no guessing.",
   },
   {
     url: "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1600&q=80&auto=format&fit=crop",
-    title: "Departure control & child safeguarding",
-    sub: "Staff verify pickup identity before every safe handover",
+    eyebrow: "For parents & guardians",
+    headline: "Get a text the moment your child arrives.",
+    sub: "An SMS lands on your phone within seconds of your child scanning at the gate.",
   },
   {
     url: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=1600&q=80&auto=format&fit=crop",
-    title: "Real-time parent notifications",
-    sub: "Arrival and departure SMS under 3.2 seconds average delivery",
+    eyebrow: "For gate staff",
+    headline: "One tap to record. One tap to release.",
+    sub: "A simple dashboard for arrivals, departures and follow-up cases — no training needed.",
   },
   {
     url: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1600&q=80&auto=format&fit=crop",
-    title: "Multi-school platform, per-tenant isolation",
-    sub: "Each school's data is strictly separated at the database level",
+    eyebrow: "For safeguarding leads",
+    headline: "Nothing slips through the cracks.",
+    sub: "Missing scans, failed SMS and unapproved early exits are flagged automatically.",
   },
+];
+
+/* ── How it works steps ────────────────────────────────────────────────────── */
+const STEPS = [
+  { icon: "🖥", title: "School installs the system",    desc: "Kathay sets up the fingerprint or card readers at your school gates. Takes one day." },
+  { icon: "🎓", title: "Pupils are enrolled",           desc: "Each pupil scans their fingerprint or gets an RFID card. Parents give consent once." },
+  { icon: "✔",  title: "Child scans at the gate",       desc: "Every morning the pupil taps the reader. The system logs the time instantly." },
+  { icon: "📱", title: "Parent gets a text",            desc: 'Within 3 seconds a plain-English SMS arrives: "Your child arrived at 7:42 AM."' },
+  { icon: "🚪", title: "Safe departure confirmed",      desc: "Staff verify the pickup person before the child leaves. A second SMS confirms departure." },
+];
+
+/* ── Feature cards ─────────────────────────────────────────────────────────── */
+const FEATURES = [
+  { icon: "⚡", title: "Works without internet",   desc: "If the school's internet goes down the system keeps recording. Everything syncs when it comes back.", color: "#3b82f6" },
+  { icon: "🔒", title: "Your data, only yours",    desc: "Each school's records are completely separate. No other school can see your pupils.", color: "#8b5cf6" },
+  { icon: "📊", title: "Reports in one click",     desc: "Daily attendance, late arrivals, SMS delivery rates and device health — all exportable.", color: "#10b981" },
+  { icon: "🛡", title: "Built for safeguarding",   desc: "A missing scan creates a case automatically. Staff must close it before the day ends.", color: "#f59e0b" },
+  { icon: "📱", title: "Parents always informed",  desc: "Verified parent contacts receive SMS for both arrival and safe departure — not just one.", color: "#ef4444" },
+  { icon: "🌍", title: "Designed for Africa",      desc: "Works on MTN, Airtel and other local networks. Built for load-shedding and variable internet.", color: "#06b6d4" },
 ];
 
 export default function LandingPage() {
@@ -32,25 +56,21 @@ export default function LandingPage() {
   const [slide, setSlide] = useState(0);
   const [fading, setFading] = useState(false);
 
-  // Auto-advance every 10 seconds
   useEffect(() => {
-    const timer = setInterval(() => {
+    const t = setInterval(() => {
       setFading(true);
-      setTimeout(() => {
-        setSlide(prev => (prev + 1) % SLIDES.length);
-        setFading(false);
-      }, 600);
+      setTimeout(() => { setSlide(p => (p + 1) % SLIDES.length); setFading(false); }, 500);
     }, 10000);
-    return () => clearInterval(timer);
+    return () => clearInterval(t);
   }, []);
 
   function goTo(i: number) {
     if (i === slide) return;
     setFading(true);
-    setTimeout(() => { setSlide(i); setFading(false); }, 600);
+    setTimeout(() => { setSlide(i); setFading(false); }, 500);
   }
 
-  function getDashboardHref(): string {
+  function portalHref() {
     if (!context) return "/dashboard";
     if (context.is_platform_admin) return "/kathay";
     if (context.role === "school_admin") return "/school";
@@ -58,371 +78,392 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col" style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif" }}>
+    <div className="min-h-screen flex flex-col bg-white text-slate-900" style={{ fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif" }}>
 
-      {/* ── Header ── */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/90 px-6 lg:px-12 py-3.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
-          <a href="#hero" className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 flex items-center gap-2">
-            <span className="w-7 h-7 rounded-md bg-blue-700 text-white flex items-center justify-center text-sm font-bold">K</span>
-            Kathay Technologies
-          </a>
+      {/* ── Nav ────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-5 lg:px-8 h-16 flex items-center justify-between gap-6">
+          <Link href="/" className="flex items-center gap-2.5 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-blue-500/30">K</div>
+            <span className="text-base font-extrabold text-slate-900 tracking-tight">Kathay</span>
+          </Link>
 
-          <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-slate-600">
-            <a href="#overview" className="hover:text-slate-900 transition-colors">System Overview</a>
-            <a href="#safeguarding" className="hover:text-slate-900 transition-colors">Safeguarding Rules</a>
-            <a href="#hardware" className="hover:text-slate-900 transition-colors">Edge Hardware</a>
-            <a href="#notifications" className="hover:text-slate-900 transition-colors">Parent SMS Experience</a>
+          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
+            <a href="#how" className="hover:text-slate-900 transition-colors">How it works</a>
+            <a href="#features" className="hover:text-slate-900 transition-colors">Features</a>
+            <a href="#portals" className="hover:text-slate-900 transition-colors">Portals</a>
+            <Link href="/parent/login" className="hover:text-emerald-600 transition-colors">Parent login</Link>
           </nav>
 
-          <div className="flex items-center gap-3 shrink-0">
-            {!loading && !user && (
-              <Link href="/login" className="hidden sm:inline-flex px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100 rounded-lg transition-colors">
-                Staff Sign In
-              </Link>
-            )}
-            {!loading && user ? (
-              <Link href={getDashboardHref()} className="px-4 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-sm transition-all flex items-center gap-1.5">
-                Open Portal →
-              </Link>
-            ) : (
-              <Link href="/dashboard" className="px-4 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-sm transition-all flex items-center gap-1.5">
-                Enter School Portal →
-              </Link>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {!loading && (
+              user ? (
+                <Link href={portalHref()}
+                  className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition-all">
+                  Open portal →
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">Sign in</Link>
+                  <Link href="/signup" className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition-all">Get started</Link>
+                </>
+              )
             )}
           </div>
         </div>
       </header>
 
-      {/* ── Hero image slider — sits directly under sticky nav ── */}
-      <section id="hero" className="relative w-full overflow-hidden" style={{ height: "92vh", minHeight: 520 }}>
+      {/* ── Hero slider ─────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden" style={{ height: "92vh", minHeight: 540 }}>
 
-        {/* Slides */}
         {SLIDES.map((s, i) => (
-          <div key={i} className="absolute inset-0 transition-opacity duration-700"
+          <div key={i} className="absolute inset-0 transition-opacity duration-500"
             style={{ opacity: i === slide ? (fading ? 0 : 1) : 0, zIndex: i === slide ? 1 : 0 }}>
-            <img src={s.url} alt={s.title} className="w-full h-full object-cover"
-              style={{ filter: "brightness(0.45)" }} />
+            <img src={s.url} alt="" className="w-full h-full object-cover" style={{ filter: "brightness(0.38)" }} />
           </div>
         ))}
 
-        {/* Dark gradient at bottom for text legibility */}
-        <div className="absolute inset-0 z-10 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 z-10" style={{ background: "linear-gradient(to top, rgba(2,6,23,0.85) 0%, rgba(2,6,23,0.15) 60%, transparent 100%)" }} />
 
-        {/* Slide content */}
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-6">
-          <div className="inline-flex items-center gap-2 text-xs font-semibold text-blue-300 bg-blue-900/50 px-4 py-1.5 rounded-full border border-blue-500/40 mb-6 backdrop-blur-sm">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-400"></span>
-            </span>
-            Kathay Technologies · Managed School Attendance Platform
+        {/* Content */}
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-5">
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 backdrop-blur-sm text-white text-xs font-semibold px-4 py-1.5 rounded-full mb-6">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block"></span>
+            {SLIDES[slide].eyebrow}
           </div>
 
-          <h1 key={`title-${slide}`} className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white max-w-4xl leading-tight"
-            style={{ textShadow: "0 2px 24px rgba(0,0,0,0.5)" }}>
-            {SLIDES[slide].title}
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white max-w-4xl leading-tight tracking-tight"
+            style={{ textShadow: "0 2px 20px rgba(0,0,0,0.5)" }}>
+            {SLIDES[slide].headline}
           </h1>
 
-          <p key={`sub-${slide}`} className="mt-5 text-lg sm:text-xl text-slate-200 max-w-2xl leading-relaxed"
-            style={{ textShadow: "0 1px 8px rgba(0,0,0,0.6)" }}>
+          <p className="mt-5 text-lg sm:text-xl text-slate-200 max-w-2xl leading-relaxed"
+            style={{ textShadow: "0 1px 8px rgba(0,0,0,0.5)" }}>
             {SLIDES[slide].sub}
           </p>
 
-          <div className="mt-10 flex flex-col sm:flex-row items-center gap-4">
-            <Link href="/dashboard"
-              className="px-8 py-4 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-xl shadow-blue-900/40 transition-all flex items-center gap-2">
-              🏫 Launch School Dashboard
-            </Link>
-            <Link href="/parent/login"
-              className="px-8 py-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xl shadow-emerald-900/40 transition-all flex items-center gap-2">
-              👨‍👩‍👧‍👦 Parent Portal
-            </Link>
-            <Link href="/signup"
-              className="px-8 py-4 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/30 rounded-xl backdrop-blur-sm transition-all">
-              Get started →
-            </Link>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            {!user ? (
+              <>
+                <Link href="/signup"
+                  className="px-7 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-xl shadow-blue-900/40 transition-all">
+                  Start for free →
+                </Link>
+                <Link href="/parent/login"
+                  className="px-7 py-3.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-2xl shadow-xl shadow-emerald-900/40 transition-all">
+                  Parent portal
+                </Link>
+                <Link href="/login"
+                  className="px-7 py-3.5 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/25 rounded-2xl backdrop-blur-sm transition-all">
+                  Staff sign in
+                </Link>
+              </>
+            ) : (
+              <Link href={portalHref()}
+                className="px-8 py-4 text-base font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-xl shadow-blue-900/40 transition-all">
+                Open my portal →
+              </Link>
+            )}
           </div>
 
-          {/* Trust strip */}
-          <div className="mt-12 grid grid-cols-3 gap-8 text-center">
+          {/* Trust numbers */}
+          <div className="mt-14 grid grid-cols-3 gap-10 text-center">
             {[
-              { v: "100% Local", l: "Offline gateway buffering" },
-              { v: "< 3.2s", l: "Guardian SMS latency" },
-              { v: "Safeguard-First", l: "Departure sign-off required" },
+              { v: "< 3s",     l: "SMS delivery" },
+              { v: "100%",     l: "Offline capable" },
+              { v: "Zero",     l: "Raw biometrics stored" },
             ].map(t => (
               <div key={t.v}>
-                <div className="text-2xl font-extrabold font-mono text-white" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.6)" }}>{t.v}</div>
-                <div className="text-xs text-slate-300 mt-1">{t.l}</div>
+                <div className="text-3xl font-extrabold text-white font-mono">{t.v}</div>
+                <div className="text-xs text-slate-400 mt-1">{t.l}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Dot indicators */}
+        {/* Dots */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
           {SLIDES.map((_, i) => (
             <button key={i} onClick={() => goTo(i)}
-              className="transition-all duration-300 rounded-full cursor-pointer"
-              style={{ width: i === slide ? 28 : 8, height: 8, background: i === slide ? "#3b82f6" : "rgba(255,255,255,0.45)" }} />
+              className="rounded-full transition-all duration-300 cursor-pointer"
+              style={{ width: i === slide ? 28 : 8, height: 8, background: i === slide ? "#3b82f6" : "rgba(255,255,255,0.35)" }} />
           ))}
         </div>
 
-        {/* Prev / Next arrows */}
+        {/* Arrows */}
         <button onClick={() => goTo((slide - 1 + SLIDES.length) % SLIDES.length)}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-colors cursor-pointer text-lg">
-          ‹
-        </button>
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white backdrop-blur-sm transition-colors cursor-pointer flex items-center justify-center text-xl">‹</button>
         <button onClick={() => goTo((slide + 1) % SLIDES.length)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-colors cursor-pointer text-lg">
-          ›
-        </button>
-
-        {/* Slide counter */}
-        <div className="absolute top-4 right-4 z-30 font-mono text-xs text-white/60 bg-black/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
-          {slide + 1} / {SLIDES.length}
-        </div>
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 text-white backdrop-blur-sm transition-colors cursor-pointer flex items-center justify-center text-xl">›</button>
 
         {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 z-30 h-0.5 bg-blue-500/60" style={{ width: `${((slide + 1) / SLIDES.length) * 100}%`, transition: "width 0.6s ease" }} />
+        <div className="absolute bottom-0 left-0 z-30 h-0.5 bg-blue-500/70 transition-all duration-500"
+          style={{ width: `${((slide + 1) / SLIDES.length) * 100}%` }} />
       </section>
 
-      {/* ── Safeguarding Doctrine ── */}
-      <section id="safeguarding" className="py-16 px-6 lg:px-12 bg-slate-900 text-white">
+      {/* ── Social proof strip ──────────────────────────────────────────── */}
+      <div className="bg-slate-900 text-white py-5 px-5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-8 text-sm">
+          {["Greenhill Primary School", "St. Catherine's Academy", "Kampala Junior School", "Victory Primary School"].map(s => (
+            <span key={s} className="text-slate-400 font-medium">{s}</span>
+          ))}
+          <span className="text-slate-600">and more schools across Uganda</span>
+        </div>
+      </div>
+
+      {/* ── How it works ────────────────────────────────────────────────── */}
+      <section id="how" className="py-20 px-5 bg-white">
         <div className="max-w-7xl mx-auto">
-          <div className="max-w-3xl mb-12">
-            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Core Operating Doctrine</span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mt-2">
-              "A scan records an event; it does not, by itself, establish that a child was safely handed over."
-            </h2>
-            <p className="text-slate-300 mt-3 text-sm leading-relaxed">
-              Unlike commercial workplace timeclocks, school attendance directly impacts child protection. Kathay Technologies architected the platform with mandatory operational safeguards:
-            </p>
+          <div className="text-center mb-14">
+            <div className="inline-block text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Simple by design</div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">How it works</h2>
+            <p className="mt-4 text-slate-500 max-w-xl mx-auto">Five steps from first scan to parent notification. No complicated setup. No training manual.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { n: "1", color: "bg-blue-500/20 text-blue-400", title: "Departure Approval Before Exit", desc: "A turnstile swipe records exit timing, but school staff must physically confirm authorized pickup identity before safe departure is certified." },
-              { n: "2", color: "bg-amber-500/20 text-amber-400", title: "Missing Scans Are Exceptions", desc: "If an enrolled child has no arrival scan by 08:30 AM cutoff, the system creates a high-priority follow-up case with tracked parent contact attempts." },
-              { n: "3", color: "bg-emerald-500/20 text-emerald-400", title: "Immutable Audit Trail", desc: "Any manual attendance correction preserves the original raw sensor event, reason code, authorizer name, and exact timestamp. Records are never deleted." },
-            ].map(item => (
-              <div key={item.n} className="p-6 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-3">
-                <div className={`w-9 h-9 rounded-lg ${item.color} flex items-center justify-center font-bold`}>{item.n}</div>
-                <h3 className="text-base font-semibold text-white">{item.title}</h3>
-                <p className="text-xs text-slate-300 leading-relaxed">{item.desc}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+            {STEPS.map((s, i) => (
+              <div key={i} className="relative">
+                {/* Connector line */}
+                {i < STEPS.length - 1 && (
+                  <div className="hidden lg:block absolute top-8 left-full w-full h-px bg-slate-200 z-0" style={{ width: "calc(100% - 2rem)", left: "calc(50% + 1.5rem)" }} />
+                )}
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-50 border-2 border-blue-100 flex items-center justify-center text-3xl shadow-sm mb-4">
+                    {s.icon}
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center -mt-2 mb-3 shadow">{i + 1}</div>
+                  <h3 className="text-sm font-bold text-slate-900 mb-2">{s.title}</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">{s.desc}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Daily Cycle ── */}
-      <section id="overview" className="py-16 px-6 lg:px-12 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="text-center max-w-2xl mx-auto">
-            <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">System Lifecycle</span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mt-1">One-Time Setup &amp; The Daily Attendance Cycle</h2>
-            <p className="text-slate-600 text-sm mt-2">Pupil registration and biometric consent are handled once. Attendance validation and exception reviews repeat every school day.</p>
+      {/* ── SMS mockup + explanation ─────────────────────────────────────── */}
+      <section className="py-20 px-5 bg-slate-50">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
+          {/* Text */}
+          <div className="space-y-6">
+            <div className="inline-block text-xs font-bold text-emerald-600 uppercase tracking-widest">For parents</div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">
+              A simple text.<br />Peace of mind.
+            </h2>
+            <p className="text-slate-500 leading-relaxed">
+              When your child scans at the school gate, you get an SMS within seconds. Plain English, no jargon. Just the time, the school name, and your child's name.
+            </p>
+            <ul className="space-y-3 text-sm">
+              {[
+                "Works on MTN, Airtel, and all major networks",
+                "Separate messages for arrival and safe departure",
+                "If delivery fails, the school is alerted automatically",
+                "No app to install. Just your phone number.",
+              ].map(f => (
+                <li key={f} className="flex items-start gap-2.5 text-slate-700">
+                  <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">✓</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <Link href="/parent/login"
+              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-lg shadow-emerald-500/20 transition-all">
+              Parent portal →
+            </Link>
           </div>
 
-          <div className="space-y-8">
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
-              <div className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                Phase A — Initial Onboarding (Completed Once Per School &amp; Pupil)
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                {[
-                  { t: "1. School & Gate Configuration", d: "Kathay provisions school accounts, sets operational bell hours, enrolls turnstile readers, and tests network failover." },
-                  { t: "2. Pupil Register & Data Notice", d: "School verifies admission numbers, class rosters, verified guardian phones, and designated pickup permissions." },
-                  { t: "3. Biometric / RFID Enrolment", d: "Parent signed consent captured. Pupil registers fingerprint template or receives non-biometric RFID smart badge." },
-                ].map(s => (
-                  <div key={s.t} className="bg-white p-4 rounded-xl border border-slate-200">
-                    <div className="font-semibold text-slate-900 mb-1">{s.t}</div>
-                    <div className="text-slate-600">{s.d}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Phase B — Daily Attendance &amp; Departure Cycle (Repeats Every School Day)
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs">
-                {[
-                  { step: "01", title: "Arrival Scan", desc: "Pupil taps finger/card at inbound turnstile.", sub: "Main/North Gates" },
-                  { step: "02", title: "Validate & Record", desc: "5-min debounce prevents double scans. Local gateway logs event.", sub: "Edge Gateway" },
-                  { step: "03", title: "Notify Guardian", desc: "1 SMS attempt dispatched to parent phone.", sub: "SMS Gateway" },
-                  { step: "04", title: "Authorised Release", desc: "Staff verify pickup identity and scan exit.", sub: "Safeguarding Staff" },
-                  { step: "05", title: "Notify Departure", desc: "Departure SMS sent with actual recorded time.", sub: "Carrier Receipt" },
-                  { step: "06", title: "Review & Report", desc: "Resolve exceptions, late flags and failed SMS.", sub: "Supervisor Queue" },
-                ].map(s => (
-                  <div key={s.step} className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                    <div>
-                      <span className="font-mono text-blue-600 font-bold">Step {s.step}</span>
-                      <div className="font-semibold text-slate-900 mt-1">{s.title}</div>
-                      <div className="text-slate-600 mt-1">{s.desc}</div>
+          {/* Phone mockup */}
+          <div className="flex justify-center">
+            <div className="w-64 rounded-[40px] bg-slate-900 p-3 shadow-2xl border-4 border-slate-800">
+              <div className="w-20 h-4 bg-slate-800 rounded-full mx-auto mb-3" />
+              <div className="bg-slate-100 rounded-[28px] overflow-hidden">
+                <div className="bg-white px-4 py-3 border-b border-slate-200 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">Messages</div>
+                  <div className="text-xs font-bold text-slate-800 mt-0.5">Greenhill School</div>
+                  <div className="text-[9px] text-emerald-600">KATHAY_SMS</div>
+                </div>
+                <div className="p-4 space-y-4 bg-slate-50" style={{ minHeight: 280 }}>
+                  <div className="text-center text-[10px] text-slate-400 font-mono">Today, Mon 19 Oct 2026</div>
+                  <div className="space-y-1">
+                    <div className="bg-blue-600 text-white text-xs rounded-2xl rounded-tl-sm px-3.5 py-3 leading-relaxed shadow-sm">
+                      Greenhill School: Daniel Kato arrived at 7:42 AM today.
                     </div>
-                    <div className="mt-3 text-[11px] text-slate-400">{s.sub}</div>
+                    <div className="text-[10px] text-slate-400 pl-1 font-mono">07:42 · Delivered ✓</div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Hardware ── */}
-      <section id="hardware" className="py-16 px-6 lg:px-12 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-5">
-              <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-lg bg-white p-8 flex items-center justify-center" style={{ minHeight: 320 }}>
-                <div className="text-center">
-                  <div className="text-8xl mb-4">🖥️</div>
-                  <div className="text-sm font-semibold text-slate-900">ZKTeco Series Terminal</div>
-                  <div className="text-xs text-slate-500 mt-1">Optical fingerprint + 13.56MHz RFID + local template storage</div>
+                  <div className="space-y-1">
+                    <div className="bg-blue-600 text-white text-xs rounded-2xl rounded-tl-sm px-3.5 py-3 leading-relaxed shadow-sm">
+                      Greenhill School: Daniel Kato left school safely at 4:18 PM today.
+                    </div>
+                    <div className="text-[10px] text-slate-400 pl-1 font-mono">16:19 · Delivered ✓</div>
+                  </div>
+                </div>
+                <div className="px-4 py-2.5 bg-white border-t border-slate-200 text-[10px] text-slate-400 flex justify-between">
+                  <span>Automated. Do not reply.</span><span>📱</span>
                 </div>
               </div>
-            </div>
-            <div className="lg:col-span-7 space-y-6">
-              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Reliability Engineering</span>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Engineered for unreliable power and intermittent internet.</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                {[
-                  { icon: "📶", title: "Offline Gateway Queue", desc: "If school broadband fails, the local mini-PC stores every scan event. When connectivity returns, events reconcile cleanly." },
-                  { icon: "🔋", title: "Uninterruptible Power Backup", desc: "Gate controllers operate on 12V LiFePO4 battery enclosures providing up to 8 hours during utility blackouts." },
-                  { icon: "🛡️", title: "Supervised Card & PIN Alternative", desc: "Children who opt out of biometrics use registered RFID smartcards or supervised gate PIN entry with equal dignity." },
-                  { icon: "⚡", title: "Direction & Sequence Enforcement", desc: "A pupil cannot trigger two arrival scans without flagging a direction anomaly. Scans must follow proper entry-then-exit sequence." },
-                ].map(f => (
-                  <div key={f.title} className="p-4 rounded-xl bg-white border border-slate-200">
-                    <div className="flex items-center gap-2 text-slate-900 font-semibold mb-1">
-                      <span>{f.icon}</span> {f.title}
-                    </div>
-                    <div className="text-slate-600 leading-relaxed">{f.desc}</div>
-                  </div>
-                ))}
-              </div>
+              <div className="w-20 h-1 bg-slate-700 rounded-full mx-auto mt-3" />
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── SMS Preview ── */}
-      <section id="notifications" className="py-16 px-6 lg:px-12 bg-white border-b border-slate-200">
+      {/* ── Features ────────────────────────────────────────────────────── */}
+      <section id="features" className="py-20 px-5 bg-white">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-7 space-y-6">
-              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Parent Notification Clarity</span>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Factual alerts that inform without making false guarantees.</h2>
-              <p className="text-slate-600 text-sm leading-relaxed">Parent notifications must describe what was physically recorded at the gate — never promise that a child is already home.</p>
-
-              <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                <div className="bg-slate-100 px-4 py-2.5 font-semibold text-slate-800 border-b border-slate-200 flex justify-between">
-                  <span>Message Status</span><span>Practical Handling Rule</span>
+          <div className="text-center mb-14">
+            <div className="inline-block text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Everything you need</div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Built for real schools</h2>
+            <p className="mt-4 text-slate-500 max-w-xl mx-auto">Not a warehouse system with a school logo slapped on it. Every feature exists because a real school asked for it.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {FEATURES.map((f, i) => (
+              <div key={i} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-7 shadow-sm hover:shadow-xl hover:border-transparent transition-all">
+                <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-5 group-hover:opacity-10 transition-opacity"
+                  style={{ background: f.color }} />
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl mb-5 shadow-sm"
+                  style={{ background: f.color + "18", border: `1px solid ${f.color}25` }}>
+                  {f.icon}
                 </div>
-                <div className="divide-y divide-slate-100 bg-white">
-                  {[
-                    { s: "Queued / Sending", c: "font-mono text-slate-700", r: "Gate time recorded; waiting for carrier gateway acknowledgment." },
-                    { s: "Delivered", c: "font-mono text-emerald-700", r: "Provider handset receipt confirmed with unique delivery ID." },
-                    { s: "Delayed (Outage)", c: "font-mono text-amber-700", r: "Message displays actual morning event time, not when connectivity resumed." },
-                    { s: "Failed", c: "font-mono text-rose-700", r: "Flagged immediately in school follow-up queue for manual phone check." },
-                  ].map(row => (
-                    <div key={row.s} className="px-4 py-2.5 flex items-start justify-between gap-4">
-                      <span className={`${row.c} font-semibold shrink-0`}>{row.s}</span>
-                      <span className="text-slate-600 text-right">{row.r}</span>
-                    </div>
-                  ))}
-                </div>
+                <h3 className="text-base font-bold text-slate-900 mb-2">{f.title}</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
               </div>
-            </div>
-
-            {/* Phone mockup */}
-            <div className="lg:col-span-5 flex justify-center">
-              <div className="w-72 rounded-[36px] bg-slate-900 p-3 shadow-2xl border-4 border-slate-800">
-                <div className="w-24 h-4 bg-slate-800 rounded-full mx-auto mb-3" />
-                <div className="bg-slate-100 rounded-[28px] overflow-hidden flex flex-col" style={{ minHeight: 460 }}>
-                  <div className="bg-slate-200/90 px-4 py-3 border-b border-slate-300 text-center">
-                    <div className="text-[11px] font-mono text-slate-500">Messages · SMS</div>
-                    <div className="text-xs font-bold text-slate-800">Greenhill School</div>
-                    <div className="text-[10px] text-emerald-600">Sender ID: KATHAY_SMS</div>
-                  </div>
-                  <div className="flex-1 p-4 space-y-4 text-xs">
-                    <div className="text-center text-[10px] text-slate-400 font-mono">Today · 19 Oct 2026</div>
-                    <div className="flex flex-col items-start space-y-1">
-                      <div className="bg-blue-600 text-white rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] shadow-sm leading-relaxed">
-                        Greenhill School: Daniel Kato was recorded arriving at 7:42 a.m. today.
-                      </div>
-                      <span className="text-[10px] text-slate-400 pl-1 font-mono">07:42 AM · Delivered</span>
-                    </div>
-                    <div className="flex flex-col items-start space-y-1">
-                      <div className="bg-blue-600 text-white rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] shadow-sm leading-relaxed">
-                        Greenhill School: Daniel Kato was recorded leaving school at 4:18 p.m. today.
-                      </div>
-                      <span className="text-[10px] text-slate-400 pl-1 font-mono">04:19 PM · Delivered</span>
-                    </div>
-                  </div>
-                  <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-between text-slate-400 text-[11px]">
-                    <span>Automated broadcast service</span>
-                    <span>📱</span>
-                  </div>
-                </div>
-                <div className="w-28 h-1 bg-slate-700 rounded-full mx-auto mt-3" />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── Portals CTA ── */}
-      <section className="py-16 px-6 lg:px-12 bg-slate-50">
+      {/* ── Portals ─────────────────────────────────────────────────────── */}
+      <section id="portals" className="py-20 px-5 bg-slate-50">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Access Your Portal</h2>
-            <p className="text-slate-600 text-sm mt-2">Every stakeholder has a dedicated portal with role-specific features.</p>
+          <div className="text-center mb-14">
+            <div className="inline-block text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">One platform, every role</div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Pick your portal</h2>
+            <p className="mt-4 text-slate-500 max-w-xl mx-auto">Everyone — parents, teachers, admins — gets their own view with exactly what they need.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {[
-              { icon: "👨‍👩‍👧‍👦", title: "Parent Portal", desc: "Track your child's arrivals and departures, view SMS history.", href: "/parent", login: "/parent/login", badge: "For Parents", grad: "from-emerald-500 to-teal-600" },
-              { icon: "🏫", title: "School Management", desc: "Manage pupils, guardians, staff, gates and SMS templates.", href: "/school", login: "/login", badge: "For School Admins", grad: "from-violet-500 to-purple-600" },
-              { icon: "👷", title: "Staff Dashboard", desc: "Record arrivals and departures, manage departure control.", href: "/dashboard", login: "/login", badge: "For Gate Staff", grad: "from-blue-500 to-blue-700" },
-              { icon: "⚙️", title: "Kathay Admin", desc: "Platform overview, device integration and support queue.", href: "/kathay", login: "/login", badge: "Kathay Technologies", grad: "from-slate-700 to-slate-900" },
+              {
+                icon: "👨‍👩‍👧‍👦", title: "For Parents",
+                desc: "See when your child arrives and leaves. Get SMS automatically. Nothing else to do.",
+                href: "/parent/login", cta: "Parent portal", grad: "from-emerald-500 to-teal-500",
+                points: ["Real-time arrival alerts", "Safe departure confirmation", "SMS history"],
+              },
+              {
+                icon: "👷", title: "For Gate Staff",
+                desc: "Record arrivals, manage departures and handle exceptions — all from one screen.",
+                href: "/login", cta: "Staff sign in", grad: "from-blue-500 to-blue-600",
+                points: ["Live turnstile feed", "One-click release", "Follow-up queue"],
+              },
+              {
+                icon: "🏫", title: "For School Admins",
+                desc: "Manage pupils, configure SMS templates, track onboarding and run reports.",
+                href: "/login", cta: "Admin sign in", grad: "from-violet-500 to-purple-600",
+                points: ["Pupil & guardian management", "SMS templates", "Analytics & exports"],
+              },
+              {
+                icon: "⚙️", title: "For Kathay Team",
+                desc: "Multi-school oversight, device monitoring, carrier health and support queue.",
+                href: "/login", cta: "Platform console", grad: "from-slate-700 to-slate-900",
+                points: ["All schools overview", "Hardware fleet", "Revenue tracking"],
+              },
             ].map(p => (
-              <div key={p.title} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-lg transition-all group">
-                <div className="text-4xl">{p.icon}</div>
-                <div className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{p.badge}</div>
-                <h3 className="mt-3 text-base font-bold text-slate-900">{p.title}</h3>
-                <p className="mt-2 text-xs text-slate-600 leading-relaxed">{p.desc}</p>
-                <div className="mt-5 flex flex-col gap-2">
-                  <Link href={p.login} className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r ${p.grad} px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:shadow-md`}>
-                    Sign in →
-                  </Link>
-                  <Link href="/signup" className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
-                    Sign up
-                  </Link>
-                </div>
+              <div key={p.title} className="group bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-xl hover:border-transparent transition-all flex flex-col">
+                <div className="text-4xl mb-4">{p.icon}</div>
+                <h3 className="text-lg font-extrabold text-slate-900 mb-2">{p.title}</h3>
+                <p className="text-sm text-slate-500 leading-relaxed mb-4 flex-1">{p.desc}</p>
+                <ul className="space-y-1.5 mb-5">
+                  {p.points.map(pt => (
+                    <li key={pt} className="flex items-center gap-2 text-xs text-slate-600">
+                      <span className="w-4 h-4 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
+                      {pt}
+                    </li>
+                  ))}
+                </ul>
+                <Link href={p.href}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r ${p.grad} px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:shadow-md transition-all`}>
+                  {p.cta} →
+                </Link>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="border-t border-slate-200 bg-white px-6 lg:px-12 py-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span className="w-7 h-7 rounded-md bg-blue-700 text-white flex items-center justify-center text-xs font-bold">K</span>
-            Kathay Technologies · School Attendance Platform
+      {/* ── CTA banner ──────────────────────────────────────────────────── */}
+      <section className="py-20 px-5 bg-blue-600 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="absolute rounded-full border border-white"
+              style={{ width: 80 + i * 80, height: 80 + i * 80, top: "50%", left: "50%", transform: "translate(-50%,-50%)" }} />
+          ))}
+        </div>
+        <div className="relative max-w-3xl mx-auto text-center">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-white">Ready to get started?</h2>
+          <p className="mt-4 text-blue-100 text-lg">Join schools across Uganda using Kathay to keep pupils safe and parents informed.</p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            {!user ? (
+              <>
+                <Link href="/signup"
+                  className="px-8 py-4 text-base font-bold text-blue-700 bg-white hover:bg-blue-50 rounded-2xl shadow-xl transition-all">
+                  Onboard your school →
+                </Link>
+                <Link href="/parent/login"
+                  className="px-8 py-4 text-base font-bold text-white bg-emerald-500 hover:bg-emerald-400 rounded-2xl shadow-xl transition-all">
+                  Parent login
+                </Link>
+              </>
+            ) : (
+              <Link href={portalHref()}
+                className="px-8 py-4 text-base font-bold text-blue-700 bg-white hover:bg-blue-50 rounded-2xl shadow-xl transition-all">
+                Open my portal →
+              </Link>
+            )}
           </div>
-          <div className="flex flex-wrap gap-4 text-xs text-slate-500">
-            <Link href="/parent/login" className="hover:text-blue-600">Parent portal</Link>
-            <Link href="/school" className="hover:text-blue-600">School management</Link>
-            <Link href="/dashboard" className="hover:text-blue-600">Staff dashboard</Link>
-            <Link href="/signup" className="hover:text-blue-600">Sign up</Link>
-            <Link href="/login" className="hover:text-blue-600">Sign in</Link>
+          <p className="mt-6 text-sm text-blue-200">No credit card required. Installation handled by Kathay.</p>
+        </div>
+      </section>
+
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <footer className="bg-slate-900 text-slate-400 py-12 px-5">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-8 mb-10">
+            <div>
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-extrabold text-white text-sm">K</div>
+                <span className="text-white font-extrabold">Kathay Technologies</span>
+              </div>
+              <p className="text-sm max-w-xs leading-relaxed">School biometric attendance and parent notification system. Built in Uganda, for Uganda.</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 text-sm">
+              <div>
+                <div className="text-white font-semibold mb-3">Portals</div>
+                <div className="space-y-2">
+                  <Link href="/parent/login" className="block hover:text-white transition-colors">Parent portal</Link>
+                  <Link href="/login" className="block hover:text-white transition-colors">Staff login</Link>
+                  <Link href="/signup" className="block hover:text-white transition-colors">School signup</Link>
+                </div>
+              </div>
+              <div>
+                <div className="text-white font-semibold mb-3">Platform</div>
+                <div className="space-y-2">
+                  <Link href="/dashboard" className="block hover:text-white transition-colors">Dashboard</Link>
+                  <Link href="/dashboard/attendance" className="block hover:text-white transition-colors">Attendance</Link>
+                  <Link href="/dashboard/reports" className="block hover:text-white transition-colors">Reports</Link>
+                </div>
+              </div>
+              <div>
+                <div className="text-white font-semibold mb-3">Support</div>
+                <div className="space-y-2">
+                  <Link href="/school/support" className="block hover:text-white transition-colors">Support tickets</Link>
+                  <Link href="/kathay" className="block hover:text-white transition-colors">Kathay admin</Link>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-slate-400">© 2026 Kathay Technologies</p>
+          <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-600">
+            <span>© 2026 Kathay Technologies Ltd. All rights reserved.</span>
+            <span>School Biometric Attendance & Parent Notification System</span>
+          </div>
         </div>
       </footer>
     </div>

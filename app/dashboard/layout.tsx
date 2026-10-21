@@ -4,32 +4,59 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { DashboardPageSkeleton } from "@/components/PageSkeleton";
 
-const SCHOOL_NAV = [
-  { id: "/dashboard", label: "School Dashboard", icon: "⊞" },
-  { id: "/dashboard/attendance", label: "Live Attendance", icon: "✔" },
-  { id: "/dashboard/departures", label: "Departure Control", icon: "→", badge: "Active" },
-  { id: "/dashboard/pupils", label: "Pupil Management", icon: "👤" },
-  { id: "/dashboard/followups", label: "Follow-up Queue", icon: "⚠", alert: true },
-  { id: "/dashboard/messages", label: "SMS Notifications", icon: "✉" },
-  { id: "/dashboard/reports", label: "Reports & Analytics", icon: "📊" },
-  { id: "/dashboard/devices", label: "Devices & Gates", icon: "⌨" },
-  { id: "/dashboard/members", label: "Staff & Audit Logs", icon: "🛡" },
-  { id: "/dashboard/settings", label: "School Settings", icon: "⚙" },
+/* ─── Nav groups ─────────────────────────────────────────────────────────── */
+const NAV_GROUPS = [
+  {
+    label: "Operations",
+    items: [
+      { id: "/dashboard", label: "Overview", icon: "▦" },
+      { id: "/dashboard/attendance", label: "Live Attendance", icon: "✔", badge: "Live" },
+      { id: "/dashboard/departures", label: "Departure Control", icon: "🚪" },
+      { id: "/dashboard/followups", label: "Follow-up Queue", icon: "⚠" },
+      { id: "/dashboard/messages", label: "SMS Notifications", icon: "✉" },
+    ],
+  },
+  {
+    label: "School Admin",
+    items: [
+      { id: "/dashboard/pupils", label: "Pupils & Guardians", icon: "🎓" },
+      { id: "/school/guardians", label: "Guardian Accounts", icon: "👨‍👩‍👧" },
+      { id: "/school/templates", label: "SMS Templates", icon: "📝" },
+      { id: "/school/calendar", label: "School Calendar", icon: "📅" },
+      { id: "/school/onboarding", label: "Onboarding", icon: "✅" },
+      { id: "/school/profile", label: "School Profile", icon: "🏫" },
+    ],
+  },
+  {
+    label: "Reporting",
+    items: [
+      { id: "/dashboard/reports", label: "Reports & Analytics", icon: "📊" },
+      { id: "/dashboard/devices", label: "Devices & Gates", icon: "🖥" },
+      { id: "/dashboard/members", label: "Staff & Audit Logs", icon: "🛡" },
+      { id: "/dashboard/settings", label: "Settings", icon: "⚙" },
+      { id: "/school/support", label: "Support Tickets", icon: "🎫" },
+    ],
+  },
 ];
 
 const VIEW_TITLES: Record<string, { title: string; subtitle: string }> = {
-  "/dashboard": { title: "School Operations Dashboard", subtitle: "Live attendance, departure queues & morning alerts" },
-  "/dashboard/attendance": { title: "Live Attendance Register", subtitle: "Real-time turnstile scans and credential validation" },
-  "/dashboard/departures": { title: "Departure Control & Release", subtitle: "Supervised student handovers and departure audit" },
-  "/dashboard/pupils": { title: "Pupil Directory & Profiles", subtitle: "Enrolled students, credentials and guardian pickup records" },
-  "/dashboard/followups": { title: "Exception & Follow-up Queue", subtitle: "Late arrivals, missing scans and SMS delivery issues" },
-  "/dashboard/messages": { title: "Guardian SMS Notification Center", subtitle: "Carrier delivery receipts, message logs and latency tracking" },
-  "/dashboard/reports": { title: "Attendance Analytics & Reports", subtitle: "Punctuality curves, grade trends and formal exports" },
-  "/dashboard/devices": { title: "Edge Devices & Turnstile Gates", subtitle: "Biometric terminals, offline gateway status & battery health" },
-  "/dashboard/members": { title: "Staff Directory & Audit Log", subtitle: "Authorized operators and attendance correction history" },
-  "/dashboard/settings": { title: "School Configuration & Safeguarding", subtitle: "Operational hours, debounce intervals & biometric consent" },
+  "/dashboard":            { title: "School Dashboard",           subtitle: "Live operations, attendance & school management in one place" },
+  "/dashboard/attendance": { title: "Live Attendance Register",   subtitle: "Real-time gate scans and credential validation" },
+  "/dashboard/departures": { title: "Departure Control",          subtitle: "Supervised student handovers and departure audit" },
+  "/dashboard/pupils":     { title: "Pupils & Guardians",         subtitle: "Enrolled students, credentials and guardian pickup records" },
+  "/dashboard/followups":  { title: "Follow-up Queue",            subtitle: "Late arrivals, missing scans and SMS delivery issues" },
+  "/dashboard/messages":   { title: "SMS Notifications",          subtitle: "Carrier delivery receipts, message logs and latency tracking" },
+  "/dashboard/reports":    { title: "Reports & Analytics",        subtitle: "Punctuality curves, grade trends and formal exports" },
+  "/dashboard/devices":    { title: "Devices & Gates",            subtitle: "Biometric terminals, offline gateway status & battery health" },
+  "/dashboard/members":    { title: "Staff & Audit Logs",         subtitle: "Authorised operators and attendance correction history" },
+  "/dashboard/settings":   { title: "Settings",                   subtitle: "Operational hours, debounce intervals & biometric consent" },
+  "/school/profile":       { title: "School Profile",             subtitle: "School name, code, contact details and operational hours" },
+  "/school/onboarding":    { title: "Onboarding Checklist",       subtitle: "Complete required setup steps before going live" },
+  "/school/calendar":      { title: "School Calendar",            subtitle: "Term dates, holidays and custom hours overrides" },
+  "/school/templates":     { title: "SMS Templates",              subtitle: "Configure arrival and departure notification messages" },
+  "/school/guardians":     { title: "Guardian Accounts",          subtitle: "Parent portal accounts and verified contact numbers" },
+  "/school/support":       { title: "Support Tickets",            subtitle: "View and submit technical support requests" },
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -39,103 +66,158 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [collapsed, setCollapsed] = useState(false);
 
   const meta = VIEW_TITLES[pathname] ?? { title: "Kathay Platform", subtitle: "School Attendance System" };
-  const schoolName = context?.school_name ?? "Greenhill Primary School";
+  const schoolName = context?.school_name ?? "My School";
+  const isAdmin = context?.role === "school_admin" || context?.is_platform_admin;
+
+  function isActive(id: string) {
+    if (id === "/dashboard") return pathname === "/dashboard";
+    return pathname.startsWith(id);
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
+    <div className="flex h-screen overflow-hidden" style={{ background: "#f1f5f9" }}>
+
       {/* ── Sidebar ── */}
-      <aside className={`relative flex flex-col bg-slate-900 text-slate-300 border-r border-slate-800 transition-all duration-300 shrink-0 ${collapsed ? "w-16" : "w-64"}`}>
+      <aside
+        className="relative flex flex-col border-r border-slate-800 transition-all duration-300 shrink-0"
+        style={{ width: collapsed ? 56 : 256, background: "#0f172a" }}>
+
         {/* Brand */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-800">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-sm shrink-0">K</div>
+        <div className="flex items-center justify-between px-3 py-3.5 border-b border-slate-800">
+          <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-extrabold text-white text-sm shrink-0 shadow-lg shadow-blue-900/40">K</div>
             {!collapsed && (
               <div className="min-w-0">
-                <div className="font-bold text-xs text-white truncate">Kathay Technologies</div>
-                <div className="text-[11px] text-slate-400 truncate">{schoolName}</div>
+                <div className="text-xs font-bold text-white truncate leading-tight">Kathay</div>
+                <div className="text-[10px] text-slate-400 truncate leading-tight">{schoolName}</div>
               </div>
             )}
           </div>
-          <button onClick={() => setCollapsed(!collapsed)} className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors" title={collapsed ? "Expand" : "Collapse"}>
-            {collapsed ? "›" : "‹"}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="text-slate-500 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors shrink-0"
+            title={collapsed ? "Expand" : "Collapse"}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={collapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"} />
+            </svg>
           </button>
         </div>
 
-        {/* Nav */}
-        <div className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-          {!collapsed && <div className="px-3 pb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">School Management</div>}
-          {SCHOOL_NAV.map(item => {
-            const isActive = pathname === item.id || (item.id !== "/dashboard" && pathname.startsWith(item.id));
-            return (
-              <Link key={item.id} href={item.id}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${isActive ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800/80"}`}
-                title={collapsed ? item.label : undefined}>
-                <span className="shrink-0 text-sm">{item.icon}</span>
-                {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
-                {!collapsed && item.badge && <span className="text-[10px] font-mono text-emerald-400">{item.badge}</span>}
-              </Link>
-            );
-          })}
+        {/* Nav groups */}
+        <div className="flex-1 overflow-y-auto py-3 space-y-4 px-2">
+          {NAV_GROUPS.map(group => (
+            <div key={group.label}>
+              {!collapsed && (
+                <div className="px-2 pb-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest">{group.label}</div>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map(item => {
+                  // Hide School Admin items from non-admin users
+                  if (group.label === "School Admin" && !isAdmin) return null;
+                  const active = isActive(item.id);
+                  return (
+                    <Link key={item.id} href={item.id}
+                      title={collapsed ? item.label : undefined}
+                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                        active
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800/70"
+                      }`}>
+                      <span className="text-sm shrink-0 w-4 text-center">{item.icon}</span>
+                      {!collapsed && <span className="truncate flex-1">{item.label}</span>}
+                      {!collapsed && item.badge && (
+                        <span className="text-[9px] font-bold text-emerald-400 font-mono shrink-0">{item.badge}</span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Edge gateway strip */}
-        <div className="px-4 py-3 border-t border-slate-800 bg-slate-950/40">
+        {/* Gateway strip */}
+        <div className="px-3 py-2.5 border-t border-slate-800" style={{ background: "rgba(0,0,0,0.3)" }}>
           {!collapsed ? (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 flex items-center gap-1">📶 Local Edge Gateway</span>
-                <span className="font-mono text-[10px] text-emerald-400">Sync OK</span>
+            <div className="space-y-0.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-slate-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+                  Edge Gateway
+                </span>
+                <span className="text-emerald-400 font-mono font-bold">Online</span>
               </div>
-              <div className="text-[10px] text-slate-500 font-mono">192.168.10.10 · 0 queued</div>
+              <div className="text-[10px] text-slate-600 font-mono">0 events queued</div>
             </div>
           ) : (
-            <div className="flex justify-center text-emerald-400 text-sm">📶</div>
+            <div className="flex justify-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+            </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="p-2 border-t border-slate-800 space-y-1">
-          <Link href="/kathay" className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition-colors">
-            <span className="shrink-0">🏢</span>
-            {!collapsed && <span className="truncate">Kathay Admin Console</span>}
-          </Link>
-          <Link href="/" className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 transition-colors">
-            <span className="shrink-0">↗</span>
-            {!collapsed && <span>Public Landing Page</span>}
-          </Link>
+          {context?.is_platform_admin && (
+            <Link href="/kathay"
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-slate-800/70 transition-colors"
+              title={collapsed ? "Kathay Admin" : undefined}>
+              <span className="text-sm w-4 text-center shrink-0">🏢</span>
+              {!collapsed && <span className="truncate">Kathay Admin Console</span>}
+            </Link>
+          )}
+          <button
+            onClick={() => signOut().then(() => router.push("/login"))}
+            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-slate-500 hover:text-rose-400 hover:bg-slate-800/70 transition-colors"
+            title={collapsed ? "Sign out" : undefined}>
+            <span className="text-sm w-4 text-center shrink-0">↩</span>
+            {!collapsed && <span>Sign out</span>}
+          </button>
         </div>
       </aside>
 
-      {/* ── Main content ── */}
+      {/* ── Main ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80 px-4 lg:px-6 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="hidden sm:flex items-center text-xs font-medium text-slate-500 gap-1.5 min-w-0">
-              <span className="text-slate-700 font-semibold flex items-center gap-1">🏫 {schoolName}</span>
+
+        {/* Top bar */}
+        <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 lg:px-6" style={{ minHeight: 56 }}>
+          <div className="flex items-center justify-between h-14 gap-4">
+            {/* Breadcrumb */}
+            <div className="hidden sm:flex items-center gap-2 text-xs min-w-0">
+              <span className="text-slate-500 font-medium truncate">{schoolName}</span>
               <span className="text-slate-300">/</span>
-              <span className="text-slate-900 font-medium truncate">{meta.title}</span>
+              <span className="text-slate-900 font-semibold truncate">{meta.title}</span>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
-              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono text-slate-600 bg-slate-50 border border-slate-200 rounded-lg">
-                📅 <span>Mon, 19 Oct 2026</span>
+            {/* Right cluster */}
+            <div className="flex items-center gap-2 ml-auto shrink-0">
+              {/* Live indicator */}
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-[11px] font-mono text-slate-600">
+                📅 {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
               </div>
-              <Link href="/dashboard/followups" className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-                🔔
+
+              {/* Alerts bell */}
+              <Link href="/dashboard/followups"
+                className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors relative">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
               </Link>
-              <button onClick={() => router.push("/login")} className="hidden sm:flex items-center gap-2 p-1.5 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-200">
-                <div className="w-6 h-6 rounded-full bg-blue-700 text-white flex items-center justify-center text-[11px] font-bold">
-                  {context?.user_name?.[0]?.toUpperCase() ?? "A"}
+
+              {/* User pill */}
+              <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 cursor-default">
+                <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px] font-bold shrink-0">
+                  {context?.user_name?.[0]?.toUpperCase() ?? "U"}
                 </div>
-                <div className="hidden lg:block text-left">
-                  <div className="text-slate-900 font-semibold">{context?.user_name ?? "Admin"}</div>
-                  <div className="text-[10px] text-slate-500 capitalize">{context?.role ?? "staff"}</div>
+                <div className="hidden lg:block text-left leading-tight">
+                  <div className="text-xs font-semibold text-slate-900">{context?.user_name ?? "Staff"}</div>
+                  <div className="text-[10px] text-slate-500 capitalize">{context?.role?.replace(/_/g, " ") ?? "staff"}</div>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
-          <div className="mt-0.5 text-[11px] text-slate-400 hidden sm:block">{meta.subtitle}</div>
+          {/* Subtitle */}
+          <div className="pb-1.5 text-[11px] text-slate-400 hidden sm:block -mt-0.5">{meta.subtitle}</div>
         </header>
 
         {/* Page content */}
