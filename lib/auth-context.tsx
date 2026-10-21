@@ -5,8 +5,10 @@ import { usePathname } from 'next/navigation'
 import { insforge, type StaffRole } from './insforge'
 import type { UserContext } from './types'
 
-// Pages that don't need role/school context to render
-const PUBLIC_PATHS = ['/', '/login', '/signup', '/parent/login', '/parent', '/auth/redirect']
+// Only pages that truly never need any auth context at all.
+// /auth/redirect is intentionally NOT here — it needs full context to route correctly.
+const PUBLIC_PATHS = ['/', '/login', '/signup', '/parent/login', '/parent']
+
 function isPublicPath(p: string) {
   return PUBLIC_PATHS.some(pub => p === pub || p.startsWith(pub + '/'))
 }
@@ -26,7 +28,7 @@ interface AuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null; requireVerification: boolean }>
   verifyEmail: (email: string, otp: string) => Promise<{ error: string | null }>
-  completeSignup: (role: StaffRole, schoolName?: string, schoolCode?: string) => Promise<{ error: string | null; schoolId: string | null }>
+  completeSignup: (role: StaffRole, schoolCode?: string) => Promise<{ error: string | null; schoolId: string | null }>
   signOut: () => Promise<void>
   refresh: () => Promise<void>
 }
@@ -55,13 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     void (async () => {
-      // Step 1 — fast: just check if a session exists
       const { data, error } = await insforge.auth.getCurrentUser()
-
       if (cancelled) return
 
       if (error || !data?.user) {
-        // No session — done immediately
         setState({ user: null, context: null, loading: false })
         return
       }
@@ -69,11 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const user = { id: data.user.id, email: data.user.email ?? null }
 
       if (isPublicPath(pathname)) {
-        // Public page — set loading:false immediately with the bare user.
-        // We don't need role/school context to render login/signup/landing.
+        // Public page — unblock render immediately; fetch context in background
         setState({ user, context: null, loading: false })
-
-        // Fetch context in the background so it's ready if they navigate away
         const { data: ctx } = await insforge.database.rpc('current_user_context')
         if (!cancelled) {
           setState({ user, context: (ctx as UserContext | undefined) ?? null, loading: false })
@@ -81,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // Protected page — we need the full context before rendering
+      // Protected page (including /auth/redirect) — wait for full context
       const { data: ctx } = await insforge.database.rpc('current_user_context')
       if (cancelled) return
       setState({
@@ -92,10 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })()
 
     return () => { cancelled = true }
-    // pathname intentionally in deps so we re-evaluate on navigation
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // signIn: authenticates then refreshes context once
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await insforge.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
@@ -118,10 +114,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null }
   }, [refresh])
 
-  const completeSignup = useCallback(async (role: StaffRole, schoolName?: string, schoolCode?: string) => {
+  // completeSignup: staff join a school by code, or become kathay_admin
+  const completeSignup = useCallback(async (role: StaffRole, schoolCode?: string) => {
     const { data, error } = await insforge.database.rpc('complete_signup', {
       p_role: role,
-      p_school_name: schoolName ?? null,
+      p_school_name: null,
       p_school_code: schoolCode ?? null,
     })
     if (error) return { error: error.message, schoolId: null }

@@ -146,17 +146,13 @@ export default function LandingPage() {
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             {!user ? (
               <>
-                <Link href="/signup"
+                <Link href="/login"
                   className="px-7 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-xl shadow-blue-900/40 transition-all">
-                  Start for free →
+                  School staff sign in →
                 </Link>
                 <Link href="/parent/login"
                   className="px-7 py-3.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-2xl shadow-xl shadow-emerald-900/40 transition-all">
                   Parent portal
-                </Link>
-                <Link href="/login"
-                  className="px-7 py-3.5 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/25 rounded-2xl backdrop-blur-sm transition-all">
-                  Staff sign in
                 </Link>
               </>
             ) : (
@@ -336,51 +332,65 @@ export default function LandingPage() {
       <section id="portals" className="py-20 px-5 bg-slate-50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-14">
-            <div className="inline-block text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">One platform, every role</div>
+            <div className="inline-block text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Three portals, one platform</div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Pick your portal</h2>
-            <p className="mt-4 text-slate-500 max-w-xl mx-auto">Everyone — parents, teachers, admins — gets their own view with exactly what they need.</p>
+            <p className="mt-4 text-slate-500 max-w-xl mx-auto">Three dedicated portals — one for parents, one for school staff, one for Kathay Technologies.</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {[
               {
-                icon: "👨‍👩‍👧‍👦", title: "For Parents",
-                desc: "See when your child arrives and leaves. Get SMS automatically. Nothing else to do.",
-                href: "/parent/login", cta: "Parent portal", grad: "from-emerald-500 to-teal-500",
-                points: ["Real-time arrival alerts", "Safe departure confirmation", "SMS history"],
+                icon: "👨‍👩‍👧‍👦",
+                title: "Parent Portal",
+                who: "For parents & guardians",
+                desc: "See when your child arrives and leaves school. Receive SMS alerts automatically. No app needed.",
+                href: "/parent/login",
+                cta: "Go to parent portal",
+                grad: "from-emerald-500 to-teal-500",
+                bg: "from-emerald-50 to-teal-50",
+                border: "border-emerald-200",
+                points: ["Arrival & departure alerts", "SMS notification history", "Child attendance record"],
               },
               {
-                icon: "👷", title: "For Gate Staff",
-                desc: "Record arrivals, manage departures and handle exceptions — all from one screen.",
-                href: "/login", cta: "Staff sign in", grad: "from-blue-500 to-blue-600",
-                points: ["Live turnstile feed", "One-click release", "Follow-up queue"],
+                icon: "🏫",
+                title: "School Portal",
+                who: "For school admins & gate staff",
+                desc: "One portal for everyone at the school — record gate scans, manage pupils, run reports and handle exceptions.",
+                href: "/login",
+                cta: "School staff sign in",
+                grad: "from-blue-600 to-blue-700",
+                bg: "from-blue-50 to-indigo-50",
+                border: "border-blue-200",
+                points: ["Live attendance feed", "Pupil & guardian management", "SMS templates & reports", "Departure control"],
               },
               {
-                icon: "🏫", title: "For School Admins",
-                desc: "Manage pupils, configure SMS templates, track onboarding and run reports.",
-                href: "/login", cta: "Admin sign in", grad: "from-violet-500 to-purple-600",
-                points: ["Pupil & guardian management", "SMS templates", "Analytics & exports"],
-              },
-              {
-                icon: "⚙️", title: "For Kathay Team",
-                desc: "Multi-school oversight, device monitoring, carrier health and support queue.",
-                href: "/login", cta: "Platform console", grad: "from-slate-700 to-slate-900",
-                points: ["All schools overview", "Hardware fleet", "Revenue tracking"],
+                icon: "⚙️",
+                title: "Kathay Admin",
+                who: "For Kathay Technologies",
+                desc: "Platform-wide management — onboard schools, monitor devices, manage SMS carriers and support queue.",
+                href: "/login",
+                cta: "Kathay team sign in",
+                grad: "from-slate-700 to-slate-900",
+                bg: "from-slate-50 to-slate-100",
+                border: "border-slate-300",
+                points: ["School onboarding", "Device & hardware fleet", "Multi-school overview", "Support & billing"],
               },
             ].map(p => (
-              <div key={p.title} className="group bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-xl hover:border-transparent transition-all flex flex-col">
-                <div className="text-4xl mb-4">{p.icon}</div>
-                <h3 className="text-lg font-extrabold text-slate-900 mb-2">{p.title}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed mb-4 flex-1">{p.desc}</p>
-                <ul className="space-y-1.5 mb-5">
+              <div key={p.title}
+                className={`group rounded-2xl border ${p.border} bg-gradient-to-br ${p.bg} p-7 shadow-sm hover:shadow-xl transition-all flex flex-col`}>
+                <div className="text-5xl mb-4">{p.icon}</div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{p.who}</div>
+                <h3 className="text-xl font-extrabold text-slate-900 mb-3">{p.title}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed mb-5 flex-1">{p.desc}</p>
+                <ul className="space-y-2 mb-6">
                   {p.points.map(pt => (
-                    <li key={pt} className="flex items-center gap-2 text-xs text-slate-600">
-                      <span className="w-4 h-4 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
+                    <li key={pt} className="flex items-center gap-2 text-xs text-slate-700">
+                      <span className="w-4 h-4 rounded-full bg-white border border-slate-200 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
                       {pt}
                     </li>
                   ))}
                 </ul>
                 <Link href={p.href}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r ${p.grad} px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:shadow-md transition-all`}>
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r ${p.grad} px-5 py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all`}>
                   {p.cta} →
                 </Link>
               </div>
@@ -403,9 +413,9 @@ export default function LandingPage() {
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             {!user ? (
               <>
-                <Link href="/signup"
+                <Link href="/login"
                   className="px-8 py-4 text-base font-bold text-blue-700 bg-white hover:bg-blue-50 rounded-2xl shadow-xl transition-all">
-                  Onboard your school →
+                  School staff sign in →
                 </Link>
                 <Link href="/parent/login"
                   className="px-8 py-4 text-base font-bold text-white bg-emerald-500 hover:bg-emerald-400 rounded-2xl shadow-xl transition-all">
