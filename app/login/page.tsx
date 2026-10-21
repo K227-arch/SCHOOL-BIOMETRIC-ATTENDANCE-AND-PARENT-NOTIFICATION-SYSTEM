@@ -4,18 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { AuthFormSkeleton } from "@/components/PageSkeleton";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, loading: authLoading, context, refresh } = useAuth();
+  // ── All hooks before any conditional return ──
+  const { signIn, context, refresh } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  // Show skeleton while auth is resolving — avoids flash of unstyled form
-  if (authLoading) return <AuthFormSkeleton />;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -5,19 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, type StaffRole } from "@/lib/insforge";
-import { AuthFormSkeleton } from "@/components/PageSkeleton";
 
 const ROLES: StaffRole[] = ["school_admin", "gate_staff", "supervisor", "kathay_admin"];
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signUp, verifyEmail, completeSignup, loading: authLoading } = useAuth();
+  const { signUp, verifyEmail, completeSignup } = useAuth();
 
-  // Show skeleton while auth is resolving
   const [step, setStep] = useState<"account" | "verify" | "onboard">("account");
   const [name, setName] = useState("");
-
-  if (authLoading) return <AuthFormSkeleton />;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<StaffRole>("school_admin");
