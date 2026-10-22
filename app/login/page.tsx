@@ -66,16 +66,15 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    // Use sendResetPasswordEmail — works for already-verified accounts
-    // resendVerificationEmail only works for unverified accounts
     const { data, error: re } = await insforge.auth.sendResetPasswordEmail({
       email: KATHAY_ADMIN_EMAIL,
     });
     setBusy(false);
     if (re) {
-      setError(`Failed to send code: ${re.message ?? "Please wait 60 seconds and try again."}`);
+      setError(`Failed to send code: ${re.message ?? "Please wait 30 seconds and try again."}`);
       return;
     }
+    // Success — move to OTP entry step
     setCodeSent(true);
     setKathayStep("verify");
     startCooldown();
@@ -257,7 +256,8 @@ export default function LoginPage() {
                 <form onSubmit={handleVerifyCode} className="space-y-5">
                   <div className="rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3 text-sm text-indigo-800 text-center">
                     A 6-digit code was sent to<br />
-                    <span className="font-bold">{KATHAY_ADMIN_EMAIL}</span>
+                    <span className="font-bold">{KATHAY_ADMIN_EMAIL}</span><br />
+                    <span className="text-xs text-indigo-600 mt-1 block">Check your inbox and spam folder. Subject: "Reset your password"</span>
                   </div>
 
                   <div>
