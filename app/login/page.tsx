@@ -11,138 +11,121 @@ type KathayStep = "request" | "verify";
 
 const KATHAY_ADMIN_EMAIL = "keithtwesigye74@gmail.com";
 
+const PANELS = {
+  school: {
+    grad: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)",
+    label: "SCHOOL PORTAL",
+    headline: <>Attendance,<br />simplified.</>,
+    sub: "Biometric gate scans, real-time attendance, parent SMS and departure control — all in one place.",
+    features: [
+      { icon: "👆", text: "Fingerprint & RFID gate readers" },
+      { icon: "💬", text: "Instant parent SMS notifications" },
+      { icon: "🛡",  text: "Safeguarding-first departure control" },
+    ],
+  },
+  parent: {
+    grad: "linear-gradient(135deg, #064e3b 0%, #059669 50%, #34d399 100%)",
+    label: "PARENT PORTAL",
+    headline: <>Your child.<br />Always safe.</>,
+    sub: "Receive instant SMS alerts when your child arrives and leaves school. Safe, simple, always on.",
+    features: [
+      { icon: "📱", text: "SMS alerts under 3 seconds" },
+      { icon: "✔",  text: "Arrival and safe departure confirmed" },
+      { icon: "📋", text: "Full attendance history" },
+    ],
+  },
+  kathay: {
+    grad: "linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #6366f1 100%)",
+    label: "PLATFORM ADMIN",
+    headline: <>One platform.<br />Every school.</>,
+    sub: "Manage all schools, devices, SMS carriers and onboarding from a single secure console.",
+    features: [
+      { icon: "🏫", text: "Multi-school tenant management" },
+      { icon: "🖥",  text: "Device & hardware fleet monitoring" },
+      { icon: "📊", text: "Revenue and carrier analytics" },
+    ],
+  },
+};
+
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, verifyEmail, refresh } = useAuth();
+  const { signIn, refresh } = useAuth();
 
-  const [portal, setPortal]       = useState<Portal>("school");
-  const [email, setEmail]         = useState("");
-  const [password, setPassword]   = useState("");
-  const [showPwd, setShowPwd]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
-  const [busy, setBusy]           = useState(false);
+  const [portal, setPortal]     = useState<Portal>("school");
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [busy, setBusy]         = useState(false);
 
-  // Kathay OTP flow
+  // Kathay OTP state
   const [kathayStep, setKathayStep] = useState<KathayStep>("request");
   const [otp, setOtp]               = useState("");
-  const [codeSent, setCodeSent]     = useState(false);
   const [countdown, setCountdown]   = useState(0);
 
-  // Start a 60s cooldown after sending a code (matches InsForge rate limit)
   function startCooldown() {
     setCountdown(60);
-    const interval = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) { clearInterval(interval); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
+    const id = setInterval(() => setCountdown(p => { if (p <= 1) { clearInterval(id); return 0; } return p - 1; }), 1000);
   }
 
   function switchPortal(p: Portal) {
-    setPortal(p);
-    setError(null);
-    setEmail("");
-    setPassword("");
-    setOtp("");
-    setKathayStep("request");
-    setCodeSent(false);
-    setCountdown(0);
+    setPortal(p); setError(null); setEmail(""); setPassword("");
+    setKathayStep("request"); setOtp(""); setCountdown(0);
   }
 
   /* ── School / Parent: password sign-in ── */
   async function handlePasswordSignIn(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setBusy(true);
-    const { error } = await signIn(email.trim(), password);
-    setBusy(false);
-    if (error) { setError(error); return; }
-    router.push(portal === "parent" ? "/parent" : "/auth/redirect");
-  }
-
-  /* ── Kathay: send OTP to locked admin email ── */
-  async function handleSendCode(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    const { data, error: re } = await insforge.auth.sendResetPasswordEmail({
-      email: KATHAY_ADMIN_EMAIL,
-    });
-    setBusy(false);
-    if (re) {
-      setError(`Failed to send code: ${re.message ?? "Please wait 30 seconds and try again."}`);
-      return;
-    }
-    // Success — move to OTP entry step
-    setCodeSent(true);
-    setKathayStep("verify");
-    startCooldown();
-  }
-
-  /* ── Kathay: verify the OTP code ── */
-  async function handleVerifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (otp.length !== 6) { setError("Enter the 6-digit code from your email."); return; }
-    setBusy(true);
-
-    // Exchange the reset password code for a token (proves identity)
-    const { data: rd, error: re } = await insforge.auth.exchangeResetPasswordToken({
-      email: KATHAY_ADMIN_EMAIL,
-      code: otp.trim(),
-    });
-
-    if (re || !rd?.token) {
+    setError(null); setBusy(true);
+    try {
+      const { error } = await signIn(email.trim(), password);
       setBusy(false);
-      setError("Invalid or expired code. Please request a new one.");
-      return;
+      if (error) { setError(error); return; }
+      router.push(portal === "parent" ? "/parent" : "/auth/redirect");
+    } catch (err: any) {
+      setBusy(false);
+      setError(err?.message ?? "An unexpected error occurred.");
     }
-
-    // Code is valid — refresh the auth session and go to /kathay
-    await refresh();
-    setBusy(false);
-    router.push("/kathay");
   }
 
-  /* ── Shared panel content per portal ── */
-  const panels = {
-    school: {
-      grad: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)",
-      label: "SCHOOL PORTAL",
-      headline: <>Attendance,<br />simplified.</>,
-      sub: "Biometric gate scans, real-time attendance, parent SMS and departure control — all in one place.",
-      features: [
-        { icon: "👆", text: "Fingerprint & RFID gate readers" },
-        { icon: "💬", text: "Instant parent SMS notifications" },
-        { icon: "🛡",  text: "Safeguarding-first departure control" },
-      ],
-    },
-    parent: {
-      grad: "linear-gradient(135deg, #064e3b 0%, #059669 50%, #34d399 100%)",
-      label: "PARENT PORTAL",
-      headline: <>Your child.<br />Always safe.</>,
-      sub: "Receive instant SMS alerts when your child arrives and leaves school. Safe, simple, always on.",
-      features: [
-        { icon: "📱", text: "SMS alerts under 3 seconds" },
-        { icon: "✔",  text: "Arrival and safe departure confirmed" },
-        { icon: "📋", text: "Full attendance history" },
-      ],
-    },
-    kathay: {
-      grad: "linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #6366f1 100%)",
-      label: "PLATFORM ADMIN",
-      headline: <>One platform.<br />Every school.</>,
-      sub: "Manage all schools, devices, SMS carriers and onboarding from a single secure console.",
-      features: [
-        { icon: "🏫", text: "Multi-school tenant management" },
-        { icon: "🖥",  text: "Device & hardware fleet monitoring" },
-        { icon: "📊", text: "Revenue and carrier analytics" },
-      ],
-    },
-  };
+  /* ── Kathay: send sign-in OTP ── */
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null); setBusy(true);
+    try {
+      const { error } = await insforge.auth.signInWithOtp({ email: KATHAY_ADMIN_EMAIL });
+      setBusy(false);
+      if (error) { setError(error.message ?? "Failed to send code. Try again."); return; }
+      setKathayStep("verify");
+      startCooldown();
+    } catch (err: any) {
+      setBusy(false);
+      setError(err?.message ?? "Network error. Check your connection.");
+    }
+  }
 
-  const panel = panels[portal];
+  /* ── Kathay: verify OTP and sign in ── */
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (otp.length !== 6) { setError("Enter the 6-digit code."); return; }
+    setError(null); setBusy(true);
+    try {
+      const { data, error } = await insforge.auth.verifyOtp({ email: KATHAY_ADMIN_EMAIL, otp: otp.trim() });
+      setBusy(false);
+      if (error) { setError(error.message ?? "Invalid or expired code. Request a new one."); return; }
+      await refresh();
+      router.push("/kathay");
+    } catch (err: any) {
+      setBusy(false);
+      setError(err?.message ?? "Verification failed. Try again.");
+    }
+  }
+
+  const panel = PANELS[portal];
+  const btnGrad =
+    portal === "kathay" ? "linear-gradient(135deg,#3730a3 0%,#6366f1 100%)" :
+    portal === "parent"  ? "linear-gradient(135deg,#064e3b 0%,#059669 100%)" :
+                           "linear-gradient(135deg,#1e40af 0%,#1d4ed8 100%)";
 
   return (
     <div className="min-h-screen flex" style={{ fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif" }}>
@@ -150,14 +133,11 @@ export default function LoginPage() {
       {/* ── Left panel ── */}
       <div className="hidden lg:flex lg:w-[46%] flex-col justify-between p-12 relative overflow-hidden"
         style={{ background: panel.grad, transition: "background 0.4s ease" }}>
-
-        {/* Decorative glows */}
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #ffffff 0%, transparent 70%)" }} />
+          style={{ background: "radial-gradient(circle,#fff 0%,transparent 70%)" }} />
         <div className="absolute -bottom-40 -right-20 w-[500px] h-[500px] rounded-full opacity-10 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #ffffff 0%, transparent 70%)" }} />
+          style={{ background: "radial-gradient(circle,#fff 0%,transparent 70%)" }} />
 
-        {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center font-extrabold text-white text-xl shadow-lg">K</div>
           <div>
@@ -166,7 +146,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="relative z-10 space-y-8">
           <div>
             <div className="text-white/60 text-xs font-bold uppercase tracking-widest mb-3">{panel.label}</div>
@@ -175,8 +154,7 @@ export default function LoginPage() {
           </div>
           <div className="space-y-3">
             {panel.features.map(f => (
-              <div key={f.text}
-                className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl px-4 py-3">
+              <div key={f.text} className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl px-4 py-3">
                 <span className="text-lg shrink-0">{f.icon}</span>
                 <span className="text-white/90 text-sm font-medium">{f.text}</span>
               </div>
@@ -191,109 +169,87 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 bg-white">
         <div className="w-full max-w-sm">
 
-          {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
             <div className="w-12 h-12 rounded-2xl bg-blue-700 flex items-center justify-center font-extrabold text-white text-xl">K</div>
           </div>
 
-          {/* Heading */}
           <div className="mb-7">
             <h2 className="text-2xl font-extrabold text-slate-900">Sign In</h2>
-            <p className="mt-1 text-sm text-slate-500">Access your {portal === "kathay" ? "Kathay admin" : portal === "parent" ? "parent" : "school"} dashboard</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Access your {portal === "kathay" ? "Kathay admin" : portal === "parent" ? "parent" : "school"} dashboard
+            </p>
           </div>
 
           {/* Portal tabs */}
           <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl mb-7">
             {(["school", "parent", "kathay"] as Portal[]).map(p => (
               <button key={p} type="button" onClick={() => switchPortal(p)}
-                className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
-                  portal === p ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}>
+                className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${portal === p ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                 {p === "school" ? "School Staff" : p === "parent" ? "Parent" : "Kathay Admin"}
               </button>
             ))}
           </div>
 
-          {/* ══ KATHAY ADMIN: OTP flow ══ */}
+          {/* ══ KATHAY: OTP sign-in (no password needed) ══ */}
           {portal === "kathay" && (
             <>
               {kathayStep === "request" ? (
-                <form onSubmit={handleSendCode} className="space-y-5">
-                  {/* Locked admin email */}
+                <form onSubmit={handleSendOtp} className="space-y-5">
+                  {/* Locked email */}
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Admin Email</label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                       </span>
-                      <input type="email" readOnly value={KATHAY_ADMIN_EMAIL}
-                        className="w-full pl-10 pr-4 py-3 text-sm bg-slate-100 border border-slate-200 rounded-xl text-slate-600 cursor-not-allowed select-none" />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
+                      <input readOnly value={KATHAY_ADMIN_EMAIL}
+                        className="w-full pl-10 pr-10 py-3 text-sm bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed" />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                       </span>
                     </div>
-                    <p className="mt-1.5 text-xs text-slate-400">A 6-digit verification code will be sent to this address.</p>
+                    <p className="mt-1.5 text-xs text-slate-400">A 6-digit sign-in code will be sent to this address.</p>
                   </div>
 
-                  {error && (
-                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
-                  )}
+                  {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
 
                   <button type="submit" disabled={busy}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-60"
-                    style={{ background: "linear-gradient(135deg, #3730a3 0%, #6366f1 100%)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 transition-all"
+                    style={{ background: "linear-gradient(135deg,#3730a3 0%,#6366f1 100%)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
                     {busy
                       ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Sending code…</>
-                      : <>✉ Send verification code</>}
+                      : <>✉ Send sign-in code</>}
                   </button>
                 </form>
               ) : (
-                /* OTP entry */
-                <form onSubmit={handleVerifyCode} className="space-y-5">
+                <form onSubmit={handleVerifyOtp} className="space-y-5">
                   <div className="rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3 text-sm text-indigo-800 text-center">
-                    A 6-digit code was sent to<br />
-                    <span className="font-bold">{KATHAY_ADMIN_EMAIL}</span><br />
-                    <span className="text-xs text-indigo-600 mt-1 block">Check your inbox and spam folder. Subject: "Reset your password"</span>
+                    Code sent to <span className="font-bold">{KATHAY_ADMIN_EMAIL}</span>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Verification Code</label>
-                    <input
-                      required autoFocus
-                      type="text" inputMode="numeric" maxLength={6}
-                      placeholder="000000"
-                      value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
-                      className="w-full text-center text-3xl font-extrabold tracking-[0.6em] py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300 placeholder:tracking-[0.6em]"
-                    />
-                    <p className="mt-1.5 text-xs text-slate-400 text-center">Enter the 6-digit code from your email</p>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">6-digit code</label>
+                    <input required autoFocus type="text" inputMode="numeric" maxLength={6}
+                      placeholder="000000" value={otp}
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
+                      className="w-full text-center text-3xl font-extrabold tracking-[0.6em] py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300" />
                   </div>
 
-                  {error && (
-                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
-                  )}
+                  {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
 
                   <button type="submit" disabled={busy || otp.length < 6}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #3730a3 0%, #6366f1 100%)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all"
+                    style={{ background: "linear-gradient(135deg,#3730a3 0%,#6366f1 100%)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
                     {busy
                       ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Verifying…</>
                       : <>→ Verify &amp; Access Portal</>}
                   </button>
 
-                  {countdown > 0 ? (
-                    <p className="w-full text-xs text-slate-400 text-center py-1">
-                      Resend available in <span className="font-bold text-indigo-600">{countdown}s</span>
-                    </p>
-                  ) : (
-                    <button type="button" onClick={() => { setKathayStep("request"); setOtp(""); setError(null); setCodeSent(false); }}
-                      className="w-full text-xs text-slate-400 hover:text-slate-700 transition-colors py-1">
-                      ← Send a new code
-                    </button>
-                  )}                </form>
+                  {countdown > 0
+                    ? <p className="text-xs text-slate-400 text-center">Resend in <span className="font-bold text-indigo-600">{countdown}s</span></p>
+                    : <button type="button" onClick={() => { setKathayStep("request"); setOtp(""); setError(null); }}
+                        className="w-full text-xs text-slate-400 hover:text-slate-700 transition-colors py-1">← Send a new code</button>}
+                </form>
               )}
             </>
           )}
@@ -301,15 +257,11 @@ export default function LoginPage() {
           {/* ══ SCHOOL / PARENT: password sign-in ══ */}
           {portal !== "kathay" && (
             <form onSubmit={handlePasswordSignIn} className="space-y-4">
-
-              {/* Email */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email</label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                   </span>
                   <input type="email" required autoComplete="email"
                     placeholder={portal === "parent" ? "you@email.com" : "you@school.edu"}
@@ -318,7 +270,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Password */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Password</label>
@@ -326,13 +277,10 @@ export default function LoginPage() {
                 </div>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                   </span>
                   <input type={showPwd ? "text" : "password"} required autoComplete="current-password"
-                    placeholder="Your password"
-                    value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)}
                     className="w-full pl-10 pr-12 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400" />
                   <button type="button" onClick={() => setShowPwd(!showPwd)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors">
@@ -343,26 +291,19 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {error && (
-                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
-              )}
+              {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
 
               <button type="submit" disabled={busy}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-60"
-                style={{ background: busy ? "#93c5fd" : "linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%)", boxShadow: busy ? "none" : "0 4px 14px rgba(29,78,216,0.35)" }}>
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 transition-all"
+                style={{ background: busy ? "#93c5fd" : btnGrad, boxShadow: busy ? "none" : "0 4px 14px rgba(29,78,216,0.3)" }}>
                 {busy
-                  ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Signing in…</>
+                  ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />Signing in…</>
                   : <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>Sign In</>}
               </button>
             </form>
           )}
 
-          {/* Footer */}
-          <div className="mt-6 text-center space-y-2">
-            <p className="text-sm text-slate-500">
-              New staff member?{" "}
-              <Link href="/signup" className="text-blue-700 font-bold hover:underline">Create account</Link>
-            </p>
+          <div className="mt-6 text-center">
             <p className="text-xs text-slate-400">Protected by encryption · Kathay Technologies</p>
           </div>
         </div>
