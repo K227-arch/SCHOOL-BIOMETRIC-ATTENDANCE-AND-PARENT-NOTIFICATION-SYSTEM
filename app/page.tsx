@@ -92,7 +92,6 @@ export default function LandingPage() {
             <a href="#how" className="hover:text-slate-900 transition-colors">How it works</a>
             <a href="#features" className="hover:text-slate-900 transition-colors">Features</a>
             <a href="#portals" className="hover:text-slate-900 transition-colors">Portals</a>
-            <Link href="/parent/login" className="hover:text-emerald-600 transition-colors">Parent login</Link>
           </nav>
 
           <div className="flex items-center gap-2.5 shrink-0">
