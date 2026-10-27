@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import type { School } from "@/lib/types";
 
 export default function SchoolProfilePage() {
@@ -15,7 +15,7 @@ export default function SchoolProfilePage() {
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const { data } = await insforge.database.from("schools").select("*").eq("id", schoolId).limit(1);
+    const { data } = await supabase.from("schools").select("*").eq("id", schoolId).limit(1);
     const s = (data as School[] | null)?.[0] ?? null;
     setSchool(s);
     if (s) { setName(s.name); setEmail(s.contact_email ?? ""); setPhone(s.contact_phone ?? ""); setAddress(s.address ?? ""); setStart(s.school_hours_start.slice(0, 5)); setEnd(s.school_hours_end.slice(0, 5)); }
@@ -27,7 +27,7 @@ export default function SchoolProfilePage() {
     e.preventDefault();
     if (!schoolId) return;
     setBusy(true); setError(null); setSaved(false);
-    const { error } = await insforge.database.from("schools").update({ name, contact_email: email || null, contact_phone: phone || null, address: address || null, school_hours_start: start, school_hours_end: end }).eq("id", schoolId);
+    const { error } = await supabase.from("schools").update({ name, contact_email: email || null, contact_phone: phone || null, address: address || null, school_hours_start: start, school_hours_end: end }).eq("id", schoolId);
     setBusy(false);
     if (error) return setError(error.message);
     setSaved(true);

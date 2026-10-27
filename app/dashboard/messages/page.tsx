@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, fullName, formatTime } from "@/lib/utils";
 
 export default function SmsNotificationsPage() {
@@ -17,35 +17,50 @@ export default function SmsNotificationsPage() {
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const { data } = await insforge.database.from("sms_notifications")
-      .select("id,pupil_id,message_type,status,phone_number,message_body,queued_at,delivered_at,sent_at")
-      .eq("school_id", schoolId).order("queued_at", { ascending: false }).limit(100);
+    const { data } = await supabase.from("sms_notifications")
+      .select("id,pupil_id,guardian_id,message_type,status,phone_number,message_body,queued_at,delivered_at,sent_at,error,attempts")
+      .eq("school_id", schoolId).order("queued_at", { ascending: false }).limit(200);
 
     const rows = (data as any[]) ?? [];
-    const pids = [...new Set(rows.map((r: any) => r.pupil_id))];
-    let pMap: Record<string, any> = {};
-    if (pids.length) {
-      const { data: p2 } = await insforge.database.from("pupils").select("id,first_name,last_name,admission_number,class_name").in("id", pids).limit(pids.length);
-      (p2 as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
-    }
+    const pids = [...new Set(rows.map((r: any) => r.pupil_id).filter(Boolean))];
+    const gids = [...new Set(rows.map((r: any) => r.guardian_id).filter(Boolean))];
+
+    const [pRes, gRes] = await Promise.all([
+      pids.length
+        ? supabase.from("pupils").select("id,first_name,last_name,admission_number,class_name").in("id", pids).limit(pids.length)
+        : Promise.resolve({ data: [] } as any),
+      gids.length
+        ? supabase.from("guardians").select("id,full_name,relationship,phone_number").in("id", gids).limit(gids.length)
+        : Promise.resolve({ data: [] } as any),
+    ]);
+
+    const pMap: Record<string, any> = {};
+    (pRes.data as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
+    const gMap: Record<string, any> = {};
+    (gRes.data as any[] ?? []).forEach((g: any) => (gMap[g.id] = g));
 
     setLogs(rows.map((r: any) => {
       const p = pMap[r.pupil_id];
+      const g = gMap[r.guardian_id];
       return {
-        id: r.id, pupilId: r.pupil_id,
+        id: r.id,
+        pupilId: r.pupil_id,
         gatewayMessageId: `MSG-${r.id.slice(0,8).toUpperCase()}`,
-        pupilName: p ? fullName(p.first_name, p.last_name) : "—",
+        pupilName: p ? fullName(p.first_name, p.last_name) : "Unknown",
         admissionNo: p?.admission_number ?? "—",
+        className: p?.class_name ?? "—",
         eventType: r.message_type === "arrival" ? "Arrival" : "Departure",
-        recipientName: "Guardian",
-        recipientPhone: r.phone_number ?? "—",
+        recipientName: g?.full_name ?? "Guardian",
+        recipientRel: g?.relationship ?? null,
+        recipientPhone: r.phone_number ?? g?.phone_number ?? "—",
         messageText: r.message_body ?? "—",
         originalEventTime: formatTime(r.queued_at),
         status: r.status,
+        attempts: r.attempts ?? 0,
         carrier: "MTN Uganda",
         queuedAt: formatTime(r.queued_at),
         deliveredAt: r.delivered_at ? formatTime(r.delivered_at) : null,
-        failureReason: r.status === "failed" ? "Handset unreachable (carrier rejected)" : null,
+        failureReason: r.error ?? (r.status === "failed" ? "Handset unreachable (carrier rejected)" : null),
       };
     }));
   }, [schoolId]);
@@ -63,10 +78,24 @@ export default function SmsNotificationsPage() {
   async function retryMsg(id: string) {
     setRetrying(prev => [...prev, id]);
     try {
-      await insforge.database.from("sms_notifications").update({ status: "queued" }).eq("id", id);
+      await supabase.from("sms_notifications").update({ status: "queued" }).eq("id", id);
       await load();
     } catch {}
     finally { setRetrying(prev => prev.filter(i => i !== id)); }
+  }
+
+  async function retryAllFailed() {
+    const failedIds = logs.filter(l => l.status === "failed").map(l => l.id);
+    if (failedIds.length === 0) return;
+    setRetrying(failedIds);
+    try {
+      // Update all failed messages back to queued in one call
+      for (const id of failedIds) {
+        await supabase.from("sms_notifications").update({ status: "queued" }).eq("id", id);
+      }
+      await load();
+    } catch {}
+    finally { setRetrying([]); }
   }
 
   const smsColors: Record<string, string> = {
@@ -131,8 +160,9 @@ export default function SmsNotificationsPage() {
         <div className="flex items-center gap-2">
           <button onClick={() => setStatusFilter("all")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer", statusFilter === "all" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:text-slate-900")}>All Messages ({logs.length})</button>
           {counts.failed > 0 && (
-            <button className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg flex items-center gap-1.5 cursor-pointer">
-              ↺ Retry All Failed
+            <button onClick={retryAllFailed} disabled={retrying.length > 0}
+              className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+              {retrying.length > 0 ? "↺ Retrying..." : `↺ Retry All Failed (${counts.failed})`}
             </button>
           )}
         </div>
@@ -161,7 +191,7 @@ export default function SmsNotificationsPage() {
                   <td className="py-3 px-4 font-mono font-medium text-slate-900 whitespace-nowrap">{log.gatewayMessageId}</td>
                   <td className="py-3 px-4 font-medium text-slate-900 whitespace-nowrap"><div>{log.pupilName}</div><div className="text-[10px] text-slate-400 font-mono">Adm: {log.admissionNo}</div></td>
                   <td className="py-3 px-4 whitespace-nowrap"><span className={cn("text-[11px] font-semibold", log.eventType === "Arrival" ? "text-emerald-700" : "text-blue-700")}>{log.eventType}</span></td>
-                  <td className="py-3 px-4 whitespace-nowrap"><div className="font-medium text-slate-900">{log.recipientName}</div><div className="text-[10px] text-slate-500 font-mono">{log.recipientPhone}</div></td>
+                  <td className="py-3 px-4 whitespace-nowrap"><div className="font-medium text-slate-900">{log.recipientName}</div><div className="text-[10px] text-slate-500">{log.recipientRel && <span className="text-slate-400">{log.recipientRel} · </span>}<span className="font-mono">{log.recipientPhone}</span></div></td>
                   <td className="py-3 px-4 text-slate-600 max-w-xs truncate">"{log.messageText}"</td>
                   <td className="py-3 px-4 font-mono tabular-nums text-slate-800 whitespace-nowrap">{log.originalEventTime}</td>
                   <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px]">
@@ -208,7 +238,7 @@ export default function SmsNotificationsPage() {
               </div>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
-              {[["Carrier Route", selected.carrier],["Gateway Message ID", selected.gatewayMessageId],["Queued", selected.queuedAt],["Delivered", selected.deliveredAt ?? "—"]].map(([k,v]) => (
+              {[["Carrier Route", selected.carrier],["Gateway Message ID", selected.gatewayMessageId],["Queued", selected.queuedAt],["Delivered", selected.deliveredAt ?? "—"],["Attempts", String(selected.attempts)]].map(([k,v]) => (
                 <div key={k} className="flex justify-between"><span className="text-slate-500">{k}:</span><span className="font-mono text-slate-900">{v}</span></div>
               ))}
               {selected.failureReason && <div className="p-2 bg-rose-50 text-rose-800 rounded border border-rose-200"><strong>Carrier Error:</strong> {selected.failureReason}</div>}

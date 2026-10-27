@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { formatDateTime } from "@/lib/utils";
 
@@ -13,8 +13,7 @@ export default function KathaySecurityPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data, error } = await insforge.database
-      .from("audit_logs")
+    const { data, error } = await supabase.from("audit_logs")
       .select("id, action, entity_type, created_at, school_id, schools(name)")
       .order("created_at", { ascending: false }).limit(100);
     if (error) return setError(error.message);
@@ -29,7 +28,7 @@ export default function KathaySecurityPage() {
 
   const controls = [
     { title: "Encrypted connections", desc: "All platform traffic uses TLS. Devices transmit minimal event data over encrypted channels.", status: "active" },
-    { title: "Secure credential handling", desc: "API keys, anon keys and device credentials managed via InsForge secrets. Never hardcoded.", status: "active" },
+    { title: "Secure credential handling", desc: "API keys managed via Supabase secrets. Never hardcoded.", status: "active" },
     { title: "Device registration", desc: "Every gate device must be registered with a school before it can submit events.", status: "active" },
     { title: "Multi-tenant data isolation", desc: "RLS policies enforced at database level — schools can only see their own pupil records.", status: "active" },
     { title: "Audit logging", desc: "All data changes, corrections and administrative actions logged with editor, time and reason.", status: "active" },

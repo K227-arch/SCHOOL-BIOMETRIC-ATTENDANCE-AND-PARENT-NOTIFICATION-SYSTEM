@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth-context";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/parent", "/auth/redirect"];
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/auth/redirect"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + "/"));

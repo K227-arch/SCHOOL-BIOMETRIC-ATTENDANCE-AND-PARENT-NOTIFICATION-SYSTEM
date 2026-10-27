@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, fullName } from "@/lib/utils";
 import type { Guardian, Pupil } from "@/lib/types";
 
@@ -21,7 +21,7 @@ export default function SchoolGuardiansPage() {
   const load = useCallback(async () => {
     if (!schoolId) return;
     setError(null);
-    let q = insforge.database.from("guardians")
+    let q = supabase.from("guardians")
       .select("id, pupil_id, full_name, relationship, phone_number, email, is_primary, receives_sms")
       .eq("school_id", schoolId).order("full_name").limit(200);
     if (search.trim()) q = q.ilike("full_name", `%${search}%`);
@@ -32,7 +32,7 @@ export default function SchoolGuardiansPage() {
 
     const pupilIds = [...new Set(g.map((x) => x.pupil_id))];
     if (pupilIds.length) {
-      const { data: pRows } = await insforge.database.from("pupils")
+      const { data: pRows } = await supabase.from("pupils")
         .select("id, first_name, last_name, admission_number, class_name")
         .in("id", pupilIds).limit(pupilIds.length);
       const map: Record<string, Pupil> = {};
@@ -40,7 +40,7 @@ export default function SchoolGuardiansPage() {
       setPupilMap(map);
     }
 
-    const { data: paRows } = await insforge.database.from("parent_accounts")
+    const { data: paRows } = await supabase.from("parent_accounts")
       .select("id, user_id, guardian_id, verified, created_at")
       .eq("school_id", schoolId).order("created_at", { ascending: false }).limit(200);
     setParentAccounts((paRows as ParentAccount[] | null) ?? []);
@@ -50,7 +50,7 @@ export default function SchoolGuardiansPage() {
 
   async function toggleVerified(pa: ParentAccount) {
     setBusy(true);
-    await insforge.database.from("parent_accounts").update({ verified: !pa.verified }).eq("id", pa.id);
+    await supabase.from("parent_accounts").update({ verified: !pa.verified }).eq("id", pa.id);
     setBusy(false);
     void load();
   }

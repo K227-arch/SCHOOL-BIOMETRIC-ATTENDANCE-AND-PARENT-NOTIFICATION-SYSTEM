@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { Device, Gate } from "@/lib/types";
 
@@ -26,9 +26,9 @@ export default function DevicesPage() {
     if (!schoolId) return;
     setError(null);
     const [{ data: dRows, error: dErr }, { data: gRows, error: gErr }] = await Promise.all([
-      insforge.database.from("devices").select("id, name, device_type, model, serial_number, status, gate_id, last_seen_at")
+      supabase.from("devices").select("id, name, device_type, model, serial_number, status, gate_id, last_seen_at")
         .eq("school_id", schoolId).order("name", { ascending: true }).limit(100),
-      insforge.database.from("gates").select("id, name, direction, status")
+      supabase.from("gates").select("id, name, direction, status")
         .eq("school_id", schoolId).order("name", { ascending: true }).limit(50),
     ]);
     if (dErr) return setError(dErr.message);
@@ -46,7 +46,7 @@ export default function DevicesPage() {
     if (!schoolId || !gateName.trim()) return;
     setBusy(true);
     setError(null);
-    const { error } = await insforge.database.from("gates").insert([
+    const { error } = await supabase.from("gates").insert([
       { school_id: schoolId, name: gateName.trim(), direction: gateDir },
     ]);
     setBusy(false);
@@ -60,7 +60,7 @@ export default function DevicesPage() {
     if (!schoolId || !devName.trim()) return;
     setBusy(true);
     setError(null);
-    const { error } = await insforge.database.from("devices").insert([
+    const { error } = await supabase.from("devices").insert([
       { school_id: schoolId, name: devName.trim(), device_type: devType, gate_id: devGate || null },
     ]);
     setBusy(false);

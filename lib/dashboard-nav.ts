@@ -1,4 +1,4 @@
-import type { StaffRole } from "./insforge";
+import type { StaffRole } from "./supabase";
 
 export interface NavItem {
   href: string;

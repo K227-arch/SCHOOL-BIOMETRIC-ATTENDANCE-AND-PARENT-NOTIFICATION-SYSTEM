@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, formatDateTime } from "@/lib/utils";
 
 interface Ticket { id: string; subject: string; description: string; category: string; priority: string; status: string; created_at: string; resolution: string | null; }
@@ -23,7 +23,7 @@ export default function SchoolSupportPage() {
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const { data, error } = await insforge.database.from("support_tickets")
+    const { data, error } = await supabase.from("support_tickets")
       .select("id, subject, description, category, priority, status, created_at, resolution")
       .eq("school_id", schoolId).order("created_at", { ascending: false }).limit(50);
     if (error) return setError(error.message);
@@ -36,7 +36,7 @@ export default function SchoolSupportPage() {
     e.preventDefault();
     if (!user || !schoolId) return;
     setBusy(true); setError(null); setSent(false);
-    const { error } = await insforge.database.from("support_tickets").insert([{
+    const { error } = await supabase.from("support_tickets").insert([{
       school_id: schoolId, submitted_by: user.id, subject: subject.trim(), description: desc.trim(), category: cat, priority,
     }]);
     setBusy(false);

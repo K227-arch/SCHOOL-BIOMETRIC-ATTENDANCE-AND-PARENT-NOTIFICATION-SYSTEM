@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, formatDateTime } from "@/lib/utils";
 
 interface BackupRow { id: string; backup_type: string; status: string; size_bytes: number | null; notes: string | null; started_at: string; completed_at: string | null; school_name: string | null; }
@@ -15,8 +15,7 @@ export default function KathayBackupsPage() {
   const [notes, setNotes] = useState("");
 
   const load = useCallback(async () => {
-    const { data, error } = await insforge.database
-      .from("backup_records")
+    const { data, error } = await supabase.from("backup_records")
       .select("id, backup_type, status, size_bytes, notes, started_at, completed_at, school_id, schools(name)")
       .order("started_at", { ascending: false }).limit(100);
     if (error) return setError(error.message);
@@ -32,7 +31,7 @@ export default function KathayBackupsPage() {
 
   async function createBackup(schoolId?: string) {
     setBusy(true); setError(null);
-    const { error } = await insforge.database.from("backup_records").insert([{
+    const { error } = await supabase.from("backup_records").insert([{
       school_id: schoolId ?? null, backup_type: "database",
       status: "completed", initiated_by: user?.id ?? null,
       notes: notes || "Manual backup initiated from Kathay console",

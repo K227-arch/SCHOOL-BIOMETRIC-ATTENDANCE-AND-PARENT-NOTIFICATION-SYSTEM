@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, formatDate } from "@/lib/utils";
 import type { School } from "@/lib/types";
 
@@ -13,8 +13,7 @@ export default function SchoolsPage() {
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error } = await insforge.database
-      .from("schools")
+    const { data, error } = await supabase.from("schools")
       .select("id, name, code, contact_email, contact_phone, timezone, status, created_at")
       .order("name", { ascending: true })
       .limit(200);

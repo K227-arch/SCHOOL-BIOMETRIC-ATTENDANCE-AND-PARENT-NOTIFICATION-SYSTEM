@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { formatDateTime } from "@/lib/utils";
 import type { AuditLog } from "@/lib/types";
 
@@ -15,8 +15,7 @@ export default function AuditPage() {
   const load = useCallback(async () => {
     if (!schoolId) return;
     setError(null);
-    const { data, error } = await insforge.database
-      .from("audit_logs")
+    const { data, error } = await supabase.from("audit_logs")
       .select("id, user_id, action, entity_type, entity_id, created_at")
       .eq("school_id", schoolId)
       .order("created_at", { ascending: false })

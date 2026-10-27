@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, fullName, formatTime } from "@/lib/utils";
 
 export default function FollowUpQueuePage() {
@@ -20,7 +20,7 @@ export default function FollowUpQueuePage() {
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const { data } = await insforge.database.from("follow_ups")
+    const { data } = await supabase.from("follow_ups")
       .select("id,pupil_id,exception_type,status,reason,created_at,created_by").eq("school_id", schoolId)
       .order("created_at", { ascending: false }).limit(100);
 
@@ -28,7 +28,7 @@ export default function FollowUpQueuePage() {
     const pids = [...new Set(rows.map((r: any) => r.pupil_id))];
     let pMap: Record<string, any> = {};
     if (pids.length) {
-      const { data: p2 } = await insforge.database.from("pupils").select("id,first_name,last_name,admission_number,class_name").in("id", pids).limit(pids.length);
+      const { data: p2 } = await supabase.from("pupils").select("id,first_name,last_name,admission_number,class_name").in("id", pids).limit(pids.length);
       (p2 as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
     }
     setCases(rows.map((r: any, i: number) => {
@@ -65,7 +65,7 @@ export default function FollowUpQueuePage() {
     if (!selected || !resolution.trim()) return;
     setBusy(true);
     try {
-      await insforge.database.from("follow_ups").update({ status: "closed", reason: resolution }).eq("id", selected.id);
+      await supabase.from("follow_ups").update({ status: "closed", reason: resolution }).eq("id", selected.id);
       setShowRes(false); setSelected(null); await load();
     } catch {}
     finally { setBusy(false); }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import type { School } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -24,8 +24,7 @@ export default function SettingsPage() {
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const { data, error } = await insforge.database
-      .from("schools").select("*").eq("id", schoolId).limit(1);
+    const { data, error } = await supabase.from("schools").select("*").eq("id", schoolId).limit(1);
     if (error) return setError(error.message);
     const s = (data as School[] | null)?.[0] ?? null;
     setSchool(s);
@@ -51,7 +50,7 @@ export default function SettingsPage() {
     setBusy(true);
     setError(null);
     setSaved(false);
-    const { error } = await insforge.database.from("schools").update({
+    const { error } = await supabase.from("schools").update({
       name,
       contact_email: email || null,
       contact_phone: phone || null,

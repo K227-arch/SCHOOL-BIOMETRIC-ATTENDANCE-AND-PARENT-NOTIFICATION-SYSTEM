@@ -1,4 +1,4 @@
-// TypeScript interfaces mirroring the InsForge database schema (public schema)
+// TypeScript interfaces mirroring the database schema (public schema)
 
 export interface Profile {
   user_id: string
@@ -230,4 +230,4 @@ export interface UserContext {
   user_name: string | null
 }
 
-import type { StaffRole } from './insforge'
+import type { StaffRole } from './supabase'

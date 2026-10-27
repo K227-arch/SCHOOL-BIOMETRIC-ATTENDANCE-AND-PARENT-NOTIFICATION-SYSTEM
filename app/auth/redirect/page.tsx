@@ -1,37 +1,110 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabase";
 
 /**
- * Routing:
- *   kathay_admin / is_platform_admin  →  /kathay
- *   school_admin / gate_staff / supervisor  →  /dashboard  (unified school portal)
- *   parent (no role)  →  /parent
- *   unknown  →  /dashboard
+ * Handles post-auth routing.
+ * - kathay_admin / is_platform_admin  →  /kathay
+ * - school_admin / gate_staff / supervisor  →  /dashboard
+ * - no role + pending signup  →  show "awaiting approval" message
+ * - no role + rejected signup  →  show rejection message
+ * - no role + no signup  →  try bootstrap admin, else /dashboard
  */
 export default function AuthRedirectPage() {
-  const { user, context, loading } = useAuth();
+  const { user, context, loading, refresh } = useAuth();
   const router = useRouter();
+  const [pendingMsg, setPendingMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (loading) return; // wait for full context (not in PUBLIC_PATHS)
-    if (!user) { router.replace("/login"); return; }
+    async function route() {
+      if (loading) return;
+      if (!user) { router.replace("/login"); return; }
 
-    if (context?.is_platform_admin || context?.role === "kathay_admin") {
-      router.replace("/kathay");
-    } else if (
-      context?.role === "school_admin" ||
-      context?.role === "gate_staff" ||
-      context?.role === "supervisor"
-    ) {
-      router.replace("/dashboard");
-    } else {
-      // No role yet (new signup before complete_signup, or parent)
-      router.replace("/dashboard");
+      // If user has no role and isn't a platform admin, try bootstrap admin grant
+      if (!context?.is_platform_admin && !context?.role && user.email) {
+        // First check if they have a pending signup request
+        try {
+          const { data: signupStatus } = await supabase.rpc("check_signup_status");
+          const status = signupStatus as { has_request: boolean; status?: string; school_name?: string; rejection_reason?: string } | null;
+
+          if (status?.has_request) {
+            if (status.status === "pending") {
+              setPendingMsg(`Your registration for ${status.school_name ?? "your school"} is pending review by a Kathay administrator. Please check back later.`);
+              return;
+            }
+            if (status.status === "rejected") {
+              setPendingMsg(`Your registration for ${status.school_name ?? "your school"} was rejected.${status.rejection_reason ? ` Reason: ${status.rejection_reason}` : ""} Please contact Kathay support.`);
+              return;
+            }
+            // approved but no role yet — refresh context and try again
+            if (status.status === "approved") {
+              await refresh();
+              // Re-check context after refresh
+              // If still no role, fall through to dashboard
+            }
+          } else {
+            // No signup request — try bootstrap admin
+            try {
+              const { error } = await supabase.rpc("make_kathay_admin", { p_email: user.email });
+              if (!error) {
+                await refresh();
+                router.replace("/kathay");
+                return;
+              }
+            } catch (e) {
+              console.warn("make_kathay_admin failed:", e);
+            }
+          }
+        } catch (e) {
+          console.warn("check_signup_status failed:", e);
+        }
+      }
+
+      if (context?.is_platform_admin || context?.role === "kathay_admin") {
+        router.replace("/kathay");
+      } else if (
+        context?.role === "school_admin" ||
+        context?.role === "gate_staff" ||
+        context?.role === "supervisor"
+      ) {
+        router.replace("/dashboard");
+      } else {
+        router.replace("/dashboard");
+      }
     }
-  }, [loading, user, context, router]);
+    void route();
+  }, [loading, user, context, router, refresh]);
+
+  // Show "awaiting approval" message instead of redirecting
+  if (pendingMsg) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6"
+        style={{ fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif" }}>
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-3xl mx-auto">
+            ⏳
+          </div>
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-900">Awaiting Approval</h2>
+            <p className="mt-2 text-sm text-slate-500 leading-relaxed">{pendingMsg}</p>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.replace("/login");
+            }}
+            className="text-xs text-slate-400 hover:text-slate-700 transition-colors font-semibold"
+          >
+            ← Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white gap-5">

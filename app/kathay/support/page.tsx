@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, formatDateTime } from "@/lib/utils";
 
 interface Ticket { id: string; subject: string; description: string; category: string; priority: string; status: string; created_at: string; resolution: string | null; school_name: string | null; }
@@ -31,7 +31,7 @@ export default function KathaySupportPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    let q = insforge.database.from("support_tickets")
+    let q = supabase.from("support_tickets")
       .select("id, subject, description, category, priority, status, created_at, resolution, school_id, schools(name)")
       .order("created_at", { ascending: false }).limit(200);
     if (filter !== "all") q = q.eq("status", filter);
@@ -49,7 +49,7 @@ export default function KathaySupportPage() {
 
   async function updateTicket(id: string, updates: Record<string, unknown>) {
     setBusy(true);
-    await insforge.database.from("support_tickets").update(updates).eq("id", id);
+    await supabase.from("support_tickets").update(updates).eq("id", id);
     setBusy(false);
     setEditing(null); setResolution("");
     void load();

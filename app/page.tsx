@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
 
@@ -135,9 +136,29 @@ const FEATURES = [
 ];
 
 export default function LandingPage() {
-  const { user, loading, context } = useAuth();
+  const { loading } = useAuth();
   const [slide, setSlide] = useState(0);
   const [fading, setFading] = useState(false);
+  const router = useRouter();
+
+  // ── Handle Supabase magic link / OTP callbacks that land on the homepage ──
+  // The default emailRedirectTo is the Site URL (this page). We detect auth
+  // params and forward to /auth/callback which handles session exchange.
+  useEffect(() => {
+    const search = window.location.search;
+    const hash   = window.location.hash;
+
+    // ?code= (PKCE) or ?token_hash= (token hash flow)
+    if (search.includes("code=") || search.includes("token_hash=")) {
+      router.replace("/auth/callback" + search);
+      return;
+    }
+    // #access_token= (implicit / magic link)
+    if (hash && hash.includes("access_token=")) {
+      router.replace("/auth/callback" + hash);
+      return;
+    }
+  }, [router]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -151,13 +172,6 @@ export default function LandingPage() {
     if (i === slide) return;
     setFading(true);
     setTimeout(() => { setSlide(i); setFading(false); }, 500);
-  }
-
-  function portalHref() {
-    if (!context) return "/dashboard";
-    if (context.is_platform_admin) return "/kathay";
-    if (context.role === "school_admin") return "/school";
-    return "/dashboard";
   }
 
   return (
@@ -181,17 +195,10 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-2.5 shrink-0">
             {!loading && (
-              user ? (
-                <Link href={portalHref()}
-                  className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition-all">
-                  Open portal →
-                </Link>
-              ) : (
-                <>
-                  <Link href="/login" className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">Sign in</Link>
-                  <Link href="/signup" className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition-all">Get started</Link>
-                </>
-              )
+              <>
+                <Link href="/login" className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">Sign in</Link>
+                <Link href="/login" className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition-all">Get started</Link>
+              </>
             )}
           </div>
         </div>
@@ -228,23 +235,10 @@ export default function LandingPage() {
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            {!user ? (
-              <>
-                <Link href="/login"
-                  className="px-7 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-xl shadow-blue-900/40 transition-all">
-                  School staff sign in →
-                </Link>
-                <Link href="/parent/login"
-                  className="px-7 py-3.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-2xl shadow-xl shadow-emerald-900/40 transition-all">
-                  Parent portal
-                </Link>
-              </>
-            ) : (
-              <Link href={portalHref()}
-                className="px-8 py-4 text-base font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-xl shadow-blue-900/40 transition-all">
-                Open my portal →
-              </Link>
-            )}
+            <Link href="/login"
+              className="px-7 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-xl shadow-blue-900/40 transition-all">
+              Get started →
+            </Link>
           </div>
 
           {/* Trust numbers */}
@@ -347,8 +341,8 @@ export default function LandingPage() {
               ))}
             </ul>
             <Link href="/parent/login"
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-lg shadow-emerald-500/20 transition-all">
-              Parent portal →
+              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg shadow-emerald-500/20 transition-all">
+              Get started →
             </Link>
           </div>
 
@@ -418,53 +412,69 @@ export default function LandingPage() {
           <div className="text-center mb-14">
             <div className="inline-block text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Three portals, one platform</div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">Pick your portal</h2>
-            <p className="mt-4 text-slate-500 max-w-xl mx-auto">Three dedicated portals — one for parents, one for school staff, one for Kathay Technologies.</p>
+            <p className="mt-4 text-slate-500 max-w-xl mx-auto">Choose the portal that fits your role. School staff and Kathay admins sign in from the same page.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {[
               {
-                icon: "👨‍👩‍👧‍👦",
-                title: "Parent Portal",
-                who: "For parents & guardians",
-                desc: "See when your child arrives and leaves school. Receive SMS alerts automatically. No app needed.",
-                href: "/parent/login",
-                cta: "Go to parent portal",
-                grad: "from-emerald-500 to-teal-500",
-                bg: "from-emerald-50 to-teal-50",
-                border: "border-emerald-200",
-                points: ["Arrival & departure alerts", "SMS notification history", "Child attendance record"],
-              },
-              {
                 icon: "🏫",
                 title: "School Portal",
                 who: "For school admins & gate staff",
-                desc: "One portal for everyone at the school — record gate scans, manage pupils, run reports and handle exceptions.",
+                desc: "Record gate scans, manage pupils, run reports and handle exceptions — all in one place.",
                 href: "/login",
-                cta: "School staff sign in",
-                grad: "from-blue-600 to-blue-700",
-                bg: "from-blue-50 to-indigo-50",
-                border: "border-blue-200",
+                cta: "Get started",
+                accent: "blue",
+                iconBg: "bg-blue-50",
+                iconBorder: "border-blue-100",
+                btnBg: "linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%)",
+                btnShadow: "rgba(29,78,216,0.3)",
+                hoverBorder: "hover:border-blue-300",
                 points: ["Live attendance feed", "Pupil & guardian management", "SMS templates & reports", "Departure control"],
               },
               {
                 icon: "⚙️",
                 title: "Kathay Admin",
                 who: "For Kathay Technologies",
-                desc: "Platform-wide management — onboard schools, monitor devices, manage SMS carriers and support queue.",
+                desc: "Platform-wide management — onboard schools, monitor devices, manage SMS carriers and approve signups.",
                 href: "/login",
-                cta: "Kathay team sign in",
-                grad: "from-slate-700 to-slate-900",
-                bg: "from-slate-50 to-slate-100",
-                border: "border-slate-300",
-                points: ["School onboarding", "Device & hardware fleet", "Multi-school overview", "Support & billing"],
+                cta: "Get started",
+                accent: "indigo",
+                iconBg: "bg-indigo-50",
+                iconBorder: "border-indigo-100",
+                btnBg: "linear-gradient(135deg, #3730a3 0%, #6366f1 100%)",
+                btnShadow: "rgba(99,102,241,0.35)",
+                hoverBorder: "hover:border-indigo-300",
+                points: ["School onboarding & approvals", "Device & hardware fleet", "Multi-school overview", "Support & billing"],
+              },
+              {
+                icon: "👨‍👩‍👧‍👦",
+                title: "Parent Portal",
+                who: "For parents & guardians",
+                desc: "See when your child arrives and leaves school. Receive SMS alerts automatically. No app needed.",
+                href: "/parent/login",
+                cta: "Parent sign in",
+                accent: "emerald",
+                iconBg: "bg-emerald-50",
+                iconBorder: "border-emerald-100",
+                btnBg: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                btnShadow: "rgba(16,185,129,0.3)",
+                hoverBorder: "hover:border-emerald-300",
+                points: ["Arrival & departure alerts", "SMS notification history", "Child attendance record"],
               },
             ].map(p => (
               <div key={p.title}
-                className={`group rounded-2xl border ${p.border} bg-gradient-to-br ${p.bg} p-7 shadow-sm hover:shadow-xl transition-all flex flex-col`}>
-                <div className="text-5xl mb-4">{p.icon}</div>
+                className={`group rounded-xl border border-slate-200 bg-white p-6 shadow-xs hover:shadow-md transition-all flex flex-col ${p.hoverBorder}`}>
+                {/* Icon */}
+                <div className={`w-12 h-12 rounded-lg ${p.iconBg} border ${p.iconBorder} flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform`}>
+                  {p.icon}
+                </div>
+                {/* Label */}
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{p.who}</div>
-                <h3 className="text-xl font-extrabold text-slate-900 mb-3">{p.title}</h3>
-                <p className="text-sm text-slate-600 leading-relaxed mb-5 flex-1">{p.desc}</p>
+                {/* Title */}
+                <h3 className="text-lg font-extrabold text-slate-900 mb-2">{p.title}</h3>
+                {/* Description */}
+                <p className="text-sm text-slate-500 leading-relaxed mb-5 flex-1">{p.desc}</p>
+                {/* Points */}
                 <ul className="space-y-2 mb-6">
                   {p.points.map(pt => (
                     <li key={pt} className="flex items-center gap-2 text-xs text-slate-700">
@@ -473,8 +483,10 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                {/* CTA */}
                 <Link href={p.href}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r ${p.grad} px-5 py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all`}>
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg px-5 py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all"
+                  style={{ background: p.btnBg, boxShadow: `0 4px 14px ${p.btnShadow}` }}>
                   {p.cta} →
                 </Link>
               </div>
@@ -585,23 +597,10 @@ export default function LandingPage() {
           <h2 className="text-3xl sm:text-4xl font-extrabold text-white">Ready to get started?</h2>
           <p className="mt-4 text-blue-100 text-lg">Join schools across Uganda using Kathay to keep pupils safe and parents informed.</p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            {!user ? (
-              <>
-                <Link href="/login"
-                  className="px-8 py-4 text-base font-bold text-blue-700 bg-white hover:bg-blue-50 rounded-2xl shadow-xl transition-all">
-                  School staff sign in →
-                </Link>
-                <Link href="/parent/login"
-                  className="px-8 py-4 text-base font-bold text-white bg-emerald-500 hover:bg-emerald-400 rounded-2xl shadow-xl transition-all">
-                  Parent login
-                </Link>
-              </>
-            ) : (
-              <Link href={portalHref()}
-                className="px-8 py-4 text-base font-bold text-blue-700 bg-white hover:bg-blue-50 rounded-2xl shadow-xl transition-all">
-                Open my portal →
-              </Link>
-            )}
+            <Link href="/login"
+              className="px-8 py-4 text-base font-bold text-blue-700 bg-white hover:bg-blue-50 rounded-2xl shadow-xl transition-all">
+              Get started →
+            </Link>
           </div>
           <p className="mt-6 text-sm text-blue-200">No credit card required. Installation handled by Kathay.</p>
         </div>
@@ -624,7 +623,7 @@ export default function LandingPage() {
                 <div className="space-y-2">
                   <Link href="/parent/login" className="block hover:text-white transition-colors">Parent portal</Link>
                   <Link href="/login" className="block hover:text-white transition-colors">Staff login</Link>
-                  <Link href="/signup" className="block hover:text-white transition-colors">School signup</Link>
+                  <Link href="/login" className="block hover:text-white transition-colors">School signup</Link>
                 </div>
               </div>
               <div>

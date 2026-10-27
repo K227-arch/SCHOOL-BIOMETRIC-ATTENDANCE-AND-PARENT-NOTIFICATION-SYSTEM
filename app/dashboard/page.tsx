@@ -3,381 +3,521 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, fullName, formatTime } from "@/lib/utils";
 
-export default function UnifiedDashboard() {
+type Tab = "overview" | "today" | "departure" | "history" | "reports";
+
+export default function DashboardPage() {
   const { context, loading } = useAuth();
   const schoolId = context?.school_id ?? null;
-  const isAdmin = context?.role === "school_admin" || context?.is_platform_admin;
 
-  const [ops, setOps] = useState({ onSite: 0, departed: 0, smsFailed: 0, openCases: 0, total: 0 });
-  const [admin, setAdmin] = useState({ pupils: 0, guardians: 0, devices: 0, tickets: 0, pendingOnboarding: 0 });
-  const [recentLogs, setRecentLogs] = useState<any[]>([]);
-  const [followups, setFollowups] = useState<any[]>([]);
-  const [departures, setDepartures] = useState<any[]>([]);
+  const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState(true);
+
+  // KPI counts
+  const [onSite,           setOnSite]           = useState(0);
+  const [departed,         setDeparted]          = useState(0);
+  const [pendingDeparture, setPendingDeparture]  = useState(0);
+  const [smsFailed,        setSmsFailed]         = useState(0);
+
+  // Panel data
+  const [recentActivity,  setRecentActivity]  = useState<any[]>([]);
+  const [depControl,      setDepControl]      = useState<any[]>([]);
+  const [alerts,          setAlerts]          = useState<any[]>([]);
+  const [pupilHistory,    setPupilHistory]    = useState<{ pupil: any; rows: any[] } | null>(null);
 
   const load = useCallback(async () => {
     if (!schoolId) return;
     setBusy(true);
     const today = new Date().toISOString().slice(0, 10);
 
-    // ── Ops data ──────────────────────────────────────────────────────────
     const [{ data: evs }, { data: fups }, { data: smsF }] = await Promise.all([
-      insforge.database.from("attendance_events")
-        .select("id,pupil_id,event_type,event_time,result,gate_id")
-        .eq("school_id", schoolId).gte("event_time", today)
-        .order("event_time", { ascending: false }).limit(10),
-      insforge.database.from("follow_ups")
+      supabase.from("attendance_events")
+        .select("id,pupil_id,event_type,event_time,result,gate_id,source")
+        .eq("school_id", schoolId)
+        .gte("event_time", `${today}T00:00:00Z`)
+        .order("event_time", { ascending: false })
+        .limit(50),
+      supabase.from("follow_ups")
         .select("id,pupil_id,exception_type,status,created_at")
-        .eq("school_id", schoolId).neq("status", "closed")
-        .order("created_at", { ascending: false }).limit(4),
-      insforge.database.from("sms_notifications")
-        .select("id").eq("school_id", schoolId).eq("status", "failed").gte("queued_at", today),
+        .eq("school_id", schoolId)
+        .neq("status", "closed")
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase.from("sms_notifications")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("status", "failed")
+        .gte("queued_at", `${today}T00:00:00Z`)
+        .limit(200),
     ]);
 
     const allEvs = (evs as any[]) ?? [];
-    const arrivalIds = new Set(allEvs.filter((e: any) => e.event_type === "arrival" && e.result === "success").map((e: any) => e.pupil_id));
-    const departureIds = new Set(allEvs.filter((e: any) => e.event_type === "departure" && e.result === "success").map((e: any) => e.pupil_id));
+    const fupRows = (fups as any[]) ?? [];
 
-    // ── Pupil name lookup ─────────────────────────────────────────────────
+    // Pupil ID sets
+    const arrivalIds  = new Set(allEvs.filter((e: any) => e.event_type === "arrival"   && e.result === "success").map((e: any) => e.pupil_id));
+    const departedIds = new Set(allEvs.filter((e: any) => e.event_type === "departure" && e.result === "success").map((e: any) => e.pupil_id));
+    const onSiteIds   = [...arrivalIds].filter(id => !departedIds.has(id));
+
+    setOnSite(onSiteIds.length);
+    setDeparted(departedIds.size);
+    setSmsFailed((smsF as any[])?.length ?? 0);
+
+    // Pending departures = pupils arrived but not yet departed AND have an open follow-up
+    const pendingDep = fupRows.filter((f: any) => f.exception_type === "missing_scan" || f.exception_type === "unresolved_release");
+    setPendingDeparture(pendingDep.length);
+
+    // Pupil name lookup
     const pids = [...new Set(allEvs.map((e: any) => e.pupil_id))];
     let pMap: Record<string, any> = {};
     if (pids.length) {
-      const { data: p2 } = await insforge.database.from("pupils")
-        .select("id,first_name,last_name,class_name,admission_number").in("id", pids).limit(pids.length);
-      (p2 as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
+      const { data: pRows } = await supabase.from("pupils")
+        .select("id,first_name,last_name,class_name,admission_number")
+        .in("id", pids as string[])
+        .limit(pids.length);
+      (pRows as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
     }
 
-    // ── SMS status map ────────────────────────────────────────────────────
+    // SMS status per event
     const evIds = allEvs.map((e: any) => e.id);
     let smsMap: Record<string, string> = {};
     if (evIds.length) {
-      const { data: smsRows } = await insforge.database.from("sms_notifications")
-        .select("attendance_event_id,status").in("attendance_event_id", evIds).limit(evIds.length);
+      const { data: smsRows } = await supabase.from("sms_notifications")
+        .select("attendance_event_id,status")
+        .in("attendance_event_id", evIds as string[])
+        .limit(evIds.length);
       (smsRows as any[] ?? []).forEach((s: any) => (smsMap[s.attendance_event_id] = s.status));
     }
 
-    setRecentLogs(allEvs.slice(0, 7).map((e: any) => {
+    // Recent activity (latest 6 events)
+    setRecentActivity(allEvs.slice(0, 6).map((e: any) => {
       const p = pMap[e.pupil_id];
       return {
-        id: e.id, time: formatTime(e.event_time),
+        id: e.id,
+        time: formatTime(e.event_time),
         name: p ? fullName(p.first_name, p.last_name) : "—",
-        class: p?.class_name ?? "—",
-        direction: e.event_type,
+        event: e.event_type === "arrival" ? "Arrival" : "Departure",
+        gate: "Main Gate",
         sms: smsMap[e.id] ?? "queued",
       };
     }));
 
-    // ── Follow-up pupil names ─────────────────────────────────────────────
-    const fuPids = [...new Set((fups as any[] ?? []).map((f: any) => f.pupil_id))];
-    let fuPMap: Record<string, any> = {};
-    if (fuPids.length) {
-      const { data: fp } = await insforge.database.from("pupils")
-        .select("id,first_name,last_name").in("id", fuPids).limit(fuPids.length);
-      (fp as any[] ?? []).forEach((p: any) => (fuPMap[p.id] = p));
-    }
+    // Departure control (arrival events for pupils still on site)
+    const depRows = allEvs
+      .filter((e: any) => e.event_type === "arrival" && e.result === "success")
+      .slice(0, 5)
+      .map((e: any) => {
+        const p = pMap[e.pupil_id];
+        const hasDep = departedIds.has(e.pupil_id);
+        return {
+          id: e.id,
+          name: p ? fullName(p.first_name, p.last_name) : "—",
+          pickup: "Parent",
+          status: hasDep ? "Released" : "Pending",
+          time: formatTime(e.event_time),
+          sms: smsMap[e.id] ?? "queued",
+        };
+      });
+    setDepControl(depRows);
 
-    setFollowups((fups as any[] ?? []).map((f: any) => ({
-      id: f.id, status: f.status, type: f.exception_type, time: formatTime(f.created_at),
-      name: fuPMap[f.pupil_id] ? fullName(fuPMap[f.pupil_id].first_name, fuPMap[f.pupil_id].last_name) : "—",
-    })));
-
-    // ── Recent departures ─────────────────────────────────────────────────
-    const depEvs = allEvs.filter((e: any) => e.event_type === "departure").slice(0, 5);
-    setDepartures(depEvs.map((e: any) => {
-      const p = pMap[e.pupil_id];
-      return { id: e.id, name: p ? fullName(p.first_name, p.last_name) : "—", class: p?.class_name ?? "—", time: formatTime(e.event_time) };
-    }));
-
-    setOps({
-      onSite: [...arrivalIds].filter(id => !departureIds.has(id)).length,
-      departed: departureIds.size,
-      smsFailed: (smsF as any[] ?? []).length,
-      openCases: (fups as any[] ?? []).filter((f: any) => f.status === "open").length,
-      total: pids.length,
+    // Alerts
+    const alertRows = fupRows.slice(0, 4).map((f: any) => {
+      const typeMap: Record<string, { label: string; action: string; icon: string; color: string }> = {
+        late_arrival:         { label: "Late arrival",         action: "Inform class teacher",        icon: "⚠️",  color: "amber" },
+        failed_sms:           { label: "SMS failed",           action: "Retry and confirm number",    icon: "❌",  color: "rose" },
+        missing_scan:         { label: "Missing exit review",  action: "Check before close of day",   icon: "ℹ️",  color: "blue" },
+        unresolved_release:   { label: "Unresolved release",   action: "Verify pickup authorisation", icon: "⚠️",  color: "amber" },
+        early_exit:           { label: "Early exit",           action: "Verify with class teacher",   icon: "⚠️",  color: "amber" },
+        unknown_fingerprint:  { label: "Unknown fingerprint",  action: "Check device logs",           icon: "❌",  color: "rose" },
+        duplicate_scan:       { label: "Duplicate scan",       action: "Review event log",            icon: "ℹ️",  color: "blue" },
+      };
+      const info = typeMap[f.exception_type] ?? { label: f.exception_type?.replace(/_/g, " "), action: "Review case", icon: "ℹ️", color: "blue" };
+      return { id: f.id, ...info, time: formatTime(f.created_at) };
     });
+    setAlerts(alertRows);
 
-    // ── Admin counts (school_admin only) ──────────────────────────────────
-    if (isAdmin) {
-      const [p, g, d, t, o] = await Promise.all([
-        insforge.database.from("pupils").select("id", { count: "exact" }).eq("school_id", schoolId).eq("status", "active").limit(1),
-        insforge.database.from("guardians").select("id", { count: "exact" }).eq("school_id", schoolId).limit(1),
-        insforge.database.from("devices").select("id", { count: "exact" }).eq("school_id", schoolId).eq("status", "active").limit(1),
-        insforge.database.from("support_tickets").select("id", { count: "exact" }).eq("school_id", schoolId).neq("status", "closed").limit(1),
-        insforge.database.from("onboarding_checklists").select("id", { count: "exact" }).eq("school_id", schoolId).eq("status", "pending").limit(1),
-      ]);
-      setAdmin({ pupils: p.count ?? 0, guardians: g.count ?? 0, devices: d.count ?? 0, tickets: t.count ?? 0, pendingOnboarding: o.count ?? 0 });
+    // Pupil history — pick the most recently scanned pupil
+    if (pids.length > 0) {
+      const firstPid = allEvs[0]?.pupil_id;
+      const p = pMap[firstPid];
+      if (p) {
+        // Get last 4 days of events for this pupil
+        const { data: histEvs } = await supabase.from("attendance_events")
+          .select("id,event_type,event_time,result")
+          .eq("school_id", schoolId)
+          .eq("pupil_id", firstPid)
+          .order("event_time", { ascending: false })
+          .limit(4);
+        const histRows = (histEvs as any[] ?? []).map((e: any) => ({
+          date: new Date(e.event_time).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+          arrival: e.event_type === "arrival" ? formatTime(e.event_time) : "—",
+          departure: e.event_type === "departure" ? formatTime(e.event_time) : "—",
+          sms: smsMap[e.id] ?? "Both",
+          remark: e.result === "success" ? "Normal" : "Review open",
+        }));
+        setPupilHistory({ pupil: p, rows: histRows });
+      }
     }
 
     setBusy(false);
-  }, [schoolId, isAdmin]);
+  }, [schoolId]);
 
   useEffect(() => { if (!loading) void load(); }, [loading, load]);
 
-  const schoolName = context?.school_name ?? "My School";
+  const smsTag = (s: string) => {
+    if (s === "delivered" || s === "sent") return <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700">Sent</span>;
+    if (s === "failed")                    return <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-700">Not sent</span>;
+    return                                        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700">Pending</span>;
+  };
 
-  const smsColor = (s: string) =>
-    s === "delivered" ? "text-emerald-700 bg-emerald-50" :
-    s === "sent"      ? "text-blue-700 bg-blue-50" :
-    s === "failed"    ? "text-rose-700 bg-rose-50" : "text-amber-700 bg-amber-50";
-
-  const caseColor = (s: string) =>
-    s === "open"        ? "bg-rose-50 text-rose-700 border-rose-200" :
-    s === "in_progress" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
+  const statusTag = (s: string) => {
+    if (s === "Released")   return <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700">Released</span>;
+    if (s === "Authorised") return <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700">Authorised</span>;
+    return                         <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700">Pending</span>;
+  };
 
   return (
-    <div className="space-y-6">
+    <div style={{ fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif" }}>
 
-      {/* ── Welcome banner ─────────────────────────────────────────────── */}
-      <div className="rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 p-5 text-white shadow-lg shadow-blue-700/20">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-lg font-bold">{schoolName}</h1>
-              <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold bg-white/20 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
-                Live
-              </span>
-            </div>
-            <p className="text-blue-100 text-xs">
-              {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · Official hours 07:00 – 16:30 · Gateway online
-            </p>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <Link href="/dashboard/attendance" className="px-3 py-1.5 text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-lg border border-white/20 transition-colors">
-              Live feed
-            </Link>
-            <Link href="/dashboard/departures" className="px-3 py-1.5 text-xs font-semibold bg-white text-blue-700 hover:bg-blue-50 rounded-lg transition-colors shadow-sm">
-              Departure control
-            </Link>
-          </div>
+      {/* ── Tab bar ── */}
+      <div className="bg-white border-b border-slate-200 px-5">
+        <div className="flex items-center gap-1 pt-2">
+          {([
+            ["overview",   "Overview"],
+            ["today",      "Today"],
+            ["departure",  "Departure Control"],
+            ["history",    "History"],
+            ["reports",    "Reports"],
+          ] as [Tab, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={cn(
+                "px-4 py-2 text-sm font-semibold rounded-t transition-colors border-b-2",
+                tab === key
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-50"
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Ops KPI tiles ───────────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Today's Operations</h2>
+      <div className="p-5 space-y-5">
+
+        {/* ── 4 KPI tiles ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Pupils on site",     value: ops.onSite,    sub: "arrived, not yet departed", icon: "✔", color: "emerald", href: "/dashboard/attendance" },
-            { label: "Departed today",     value: ops.departed,  sub: "confirmed gate exits",      icon: "🚪", color: "blue",    href: "/dashboard/departures" },
-            { label: "Open exceptions",    value: ops.openCases, sub: "need follow-up action",     icon: "⚠", color: "amber",   href: "/dashboard/followups" },
-            { label: "SMS failures today", value: ops.smsFailed, sub: "undelivered notifications", icon: "✉", color: "rose",    href: "/dashboard/messages" },
-          ].map((k, i) => (
-            <Link key={i} href={k.href}
-              className={cn(
-                "group bg-white rounded-xl border p-4 shadow-xs hover:shadow-md transition-all",
-                k.color === "emerald" ? "border-slate-200 hover:border-emerald-300" :
-                k.color === "blue"    ? "border-slate-200 hover:border-blue-300" :
-                k.color === "amber"   ? "border-slate-200 hover:border-amber-300" :
-                                        "border-slate-200 hover:border-rose-300"
-              )}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-slate-500">{k.label}</span>
-                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-sm group-hover:scale-110 transition-transform",
-                  k.color === "emerald" ? "bg-emerald-50" :
-                  k.color === "blue"    ? "bg-blue-50" :
-                  k.color === "amber"   ? "bg-amber-50" : "bg-rose-50")}>{k.icon}</div>
+            {
+              label: "Pupils on site",
+              value: onSite,
+              icon: "👥",
+              iconBg: "bg-emerald-500",
+              href: "/dashboard/attendance",
+            },
+            {
+              label: "Already departed",
+              value: departed,
+              icon: "↩",
+              iconBg: "bg-blue-500",
+              href: "/dashboard/departures",
+            },
+            {
+              label: "Pending departures",
+              value: pendingDeparture,
+              icon: "⏰",
+              iconBg: "bg-amber-500",
+              href: "/dashboard/departures",
+            },
+            {
+              label: "SMS failed",
+              value: smsFailed,
+              icon: "⚠",
+              iconBg: "bg-red-500",
+              href: "/dashboard/messages",
+            },
+          ].map((k) => (
+            <Link
+              key={k.label}
+              href={k.href}
+              className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:shadow-md transition-all flex items-center gap-4"
+            >
+              <div className={cn("w-12 h-12 rounded-full flex items-center justify-center text-white text-xl shrink-0", k.iconBg)}>
+                {k.icon}
               </div>
-              <div className={cn("text-3xl font-extrabold font-mono tabular-nums",
-                k.color === "amber" ? "text-amber-600" : k.color === "rose" ? "text-rose-600" : "text-slate-900")}>
-                {busy ? "—" : k.value}
-              </div>
-              <div className="text-[11px] text-slate-500 mt-1">{k.sub}</div>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Admin stat tiles (school_admin only) ────────────────────────── */}
-      {isAdmin && (
-        <div>
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">School Administration</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[
-              { label: "Enrolled pupils",   value: admin.pupils,            color: "text-blue-700",   href: "/dashboard/pupils",    icon: "🎓" },
-              { label: "Guardians",         value: admin.guardians,         color: "text-violet-700", href: "/school/guardians",     icon: "👨‍👩‍👧" },
-              { label: "Active devices",    value: admin.devices,           color: "text-indigo-700", href: "/dashboard/devices",    icon: "🖥" },
-              { label: "Support tickets",   value: admin.tickets,           color: "text-amber-700",  href: "/school/support",       icon: "🎫" },
-              { label: "Onboarding steps",  value: admin.pendingOnboarding, color: "text-rose-700",   href: "/school/onboarding",    icon: "✅" },
-            ].map((c, i) => (
-              <Link key={i} href={c.href}
-                className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:shadow-md hover:border-blue-300 transition-all">
-                <div className="text-xl mb-2">{c.icon}</div>
-                <div className={cn("text-2xl font-extrabold font-mono", c.color)}>{busy ? "—" : c.value}</div>
-                <div className="text-[11px] text-slate-500 mt-1">{c.label}</div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── 3-col operational grid ──────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        {/* Recent gate events */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <span className="text-blue-600 text-sm">⏱</span>
-              <h3 className="text-sm font-bold text-slate-900">Recent gate events</h3>
-            </div>
-            <Link href="/dashboard/attendance" className="text-xs text-blue-600 hover:text-blue-800 font-medium">View all →</Link>
-          </div>
-          <div className="flex-1 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400 text-[11px]">
-                  <th className="py-2 px-4 text-left font-medium">Time</th>
-                  <th className="py-2 px-4 text-left font-medium">Pupil</th>
-                  <th className="py-2 px-4 text-left font-medium">Event</th>
-                  <th className="py-2 px-4 text-left font-medium">SMS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {recentLogs.length === 0 && !busy && (
-                  <tr><td colSpan={4} className="py-8 text-center text-slate-400 text-xs">No events today yet</td></tr>
-                )}
-                {recentLogs.map(log => (
-                  <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-2.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">{log.time}</td>
-                    <td className="py-2.5 px-4 font-medium text-slate-900">
-                      <div className="truncate max-w-[90px]">{log.name}</div>
-                      <div className="text-[10px] text-slate-400">{log.class}</div>
-                    </td>
-                    <td className="py-2.5 px-4 whitespace-nowrap">
-                      <span className={cn("text-[11px] font-semibold", log.direction === "arrival" ? "text-emerald-700" : "text-blue-700")}>
-                        {log.direction === "arrival" ? "↓ Arrival" : "↑ Departure"}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-4">
-                      <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold", smsColor(log.sms))}>
-                        {log.sms}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Recent departures */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <span className="text-blue-600 text-sm">🚪</span>
-              <h3 className="text-sm font-bold text-slate-900">Recent departures</h3>
-            </div>
-            <Link href="/dashboard/departures" className="text-xs text-blue-600 hover:text-blue-800 font-medium">Manage →</Link>
-          </div>
-          <div className="flex-1 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400 text-[11px]">
-                  <th className="py-2 px-4 text-left font-medium">Pupil</th>
-                  <th className="py-2 px-4 text-left font-medium">Class</th>
-                  <th className="py-2 px-4 text-left font-medium">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {departures.length === 0 && !busy && (
-                  <tr><td colSpan={3} className="py-8 text-center text-slate-400 text-xs">No departures yet today</td></tr>
-                )}
-                {departures.map(d => (
-                  <tr key={d.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-2.5 px-4 font-medium text-slate-900">{d.name}</td>
-                    <td className="py-2.5 px-4 text-slate-500 font-mono text-[11px]">{d.class}</td>
-                    <td className="py-2.5 px-4 font-mono text-[11px] text-slate-600">{d.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Follow-up queue */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <span className="text-amber-500 text-sm">⚠</span>
-              <h3 className="text-sm font-bold text-slate-900">Open follow-ups</h3>
-            </div>
-            <Link href="/dashboard/followups" className="text-xs text-blue-600 hover:text-blue-800 font-medium">View all →</Link>
-          </div>
-          <div className="flex-1 p-3 space-y-2">
-            {followups.length === 0 && !busy && (
-              <div className="py-6 text-center text-xs text-slate-400">No open follow-ups 🎉</div>
-            )}
-            {followups.map(f => (
-              <Link key={f.id} href="/dashboard/followups"
-                className={cn("flex items-start gap-2.5 p-3 rounded-lg border transition-colors hover:opacity-90", caseColor(f.status))}>
-                <span className="text-base mt-0.5 shrink-0">
-                  {f.status === "open" ? "🔴" : f.status === "in_progress" ? "🟡" : "🟢"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold truncate capitalize">{f.type?.replace(/_/g, " ")}</span>
-                    <span className="text-[10px] font-mono shrink-0">{f.time}</span>
-                  </div>
-                  <div className="text-[11px] mt-0.5 truncate">{f.name}</div>
+              <div>
+                <div className="text-xs font-medium text-slate-500 leading-tight">{k.label}</div>
+                <div className="text-3xl font-extrabold font-mono tabular-nums text-slate-900 leading-tight">
+                  {busy ? "—" : k.value}
                 </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Quick actions grid ─────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
-            { label: "Record scan",        href: "/dashboard/attendance", icon: "✔", color: "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" },
-            { label: "Release pupil",      href: "/dashboard/departures", icon: "🚪", color: "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100" },
-            { label: "Add pupil",          href: "/dashboard/pupils",     icon: "🎓", color: "bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100" },
-            { label: "SMS centre",         href: "/dashboard/messages",   icon: "✉", color: "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100" },
-            { label: "View reports",       href: "/dashboard/reports",    icon: "📊", color: "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100" },
-            ...(isAdmin ? [
-              { label: "SMS templates",    href: "/school/templates",     icon: "📝", color: "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100" },
-            ] : [
-              { label: "Devices & gates",  href: "/dashboard/devices",    icon: "🖥", color: "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100" },
-            ]),
-          ].map(a => (
-            <Link key={a.label} href={a.href}
-              className={cn("flex flex-col items-center justify-center gap-2 p-4 rounded-xl border text-xs font-semibold transition-all text-center shadow-xs hover:shadow-md", a.color)}>
-              <span className="text-2xl">{a.icon}</span>
-              <span>{a.label}</span>
+              </div>
             </Link>
           ))}
         </div>
-      </div>
 
-      {/* ── Admin shortcuts (school_admin only) ─────────────────────────── */}
-      {isAdmin && (
-        <div>
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">School Management</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { title: "SMS Templates",      desc: "Configure arrival and departure notification messages sent to parents.", href: "/school/templates",  icon: "📝" },
-              { title: "School Calendar",    desc: "Set term dates, holidays and custom school hours overrides.",           href: "/school/calendar",   icon: "📅" },
-              { title: "Guardian Accounts",  desc: "Manage parent portal access and verified guardian contact numbers.",   href: "/school/guardians",  icon: "👨‍👩‍👧" },
-              { title: "Onboarding Steps",   desc: "Complete required setup before activating biometric capture.",          href: "/school/onboarding", icon: "✅" },
-              { title: "School Profile",     desc: "Update school name, code, contact details and operational hours.",      href: "/school/profile",    icon: "🏫" },
-              { title: "Support Tickets",    desc: "Submit and track technical support requests to Kathay Technologies.",   href: "/school/support",    icon: "🎫" },
-            ].map(item => (
-              <Link key={item.title} href={item.href}
-                className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all group">
-                <div className="text-2xl mb-3">{item.icon}</div>
-                <div className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{item.title}</div>
-                <div className="text-xs text-slate-500 mt-1 leading-relaxed">{item.desc}</div>
-              </Link>
-            ))}
+        {/* ── 3-col panels ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* ── Recent activity ── */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-blue-600">📋</span>
+                <h3 className="text-sm font-bold text-slate-900">Recent activity</h3>
+              </div>
+              <Link href="/dashboard/attendance" className="text-xs text-blue-600 hover:text-blue-800 font-medium">View all →</Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 text-[11px]">
+                    <th className="py-2 px-3 text-left font-medium">Time</th>
+                    <th className="py-2 px-3 text-left font-medium">Pupil</th>
+                    <th className="py-2 px-3 text-left font-medium">Event</th>
+                    <th className="py-2 px-3 text-left font-medium">Gate</th>
+                    <th className="py-2 px-3 text-left font-medium">SMS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {recentActivity.length === 0 && !busy && (
+                    <tr><td colSpan={5} className="py-8 text-center text-slate-400 text-xs">No events today yet</td></tr>
+                  )}
+                  {recentActivity.map(row => (
+                    <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">{row.time}</td>
+                      <td className="py-2 px-3 font-medium text-slate-800 whitespace-nowrap">{row.name}</td>
+                      <td className="py-2 px-3 text-slate-600 whitespace-nowrap">{row.event}</td>
+                      <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{row.gate}</td>
+                      <td className="py-2 px-3">{smsTag(row.sms)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-2 border-t border-slate-50 space-y-0.5">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0"></span>
+                Shows latest scans and SMS status
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0"></span>
+                Covers both arrival and departure events
+              </div>
+            </div>
+          </div>
+
+          {/* ── Departure control ── */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-blue-600">🚌</span>
+                <h3 className="text-sm font-bold text-slate-900">Departure control</h3>
+              </div>
+              <Link href="/dashboard/departures" className="text-xs text-blue-600 hover:text-blue-800 font-medium">View all →</Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 text-[11px]">
+                    <th className="py-2 px-3 text-left font-medium">Pupil</th>
+                    <th className="py-2 px-3 text-left font-medium">Pickup</th>
+                    <th className="py-2 px-3 text-left font-medium">Status</th>
+                    <th className="py-2 px-3 text-left font-medium">Time</th>
+                    <th className="py-2 px-3 text-left font-medium">SMS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {depControl.length === 0 && !busy && (
+                    <tr><td colSpan={5} className="py-8 text-center text-slate-400 text-xs">No departures today yet</td></tr>
+                  )}
+                  {depControl.map(row => (
+                    <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-2 px-3 font-medium text-slate-800 whitespace-nowrap">{row.name}</td>
+                      <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{row.pickup}</td>
+                      <td className="py-2 px-3">{statusTag(row.status)}</td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">{row.time}</td>
+                      <td className="py-2 px-3">{smsTag(row.sms)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-2 border-t border-slate-50 space-y-0.5">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0"></span>
+                Tracks release status and pickup person
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0"></span>
+                Flags incomplete departures for review
+              </div>
+            </div>
+          </div>
+
+          {/* ── Alerts and follow-up ── */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-blue-600">🔔</span>
+                <h3 className="text-sm font-bold text-slate-900">Alerts and follow-up</h3>
+              </div>
+              <Link href="/dashboard/followups" className="text-xs text-blue-600 hover:text-blue-800 font-medium">View all →</Link>
+            </div>
+            <div className="flex-1 p-3 space-y-2">
+              {alerts.length === 0 && !busy && (
+                <div className="py-6 text-center text-xs text-slate-400">No open alerts 🎉</div>
+              )}
+              {alerts.map(a => (
+                <Link key={a.id} href="/dashboard/followups"
+                  className={cn(
+                    "flex items-start gap-3 p-3 rounded-lg border transition-colors hover:opacity-90",
+                    a.color === "amber" ? "bg-amber-50 border-amber-200" :
+                    a.color === "rose"  ? "bg-red-50 border-red-200" :
+                                          "bg-blue-50 border-blue-200"
+                  )}>
+                  <span className="text-lg shrink-0 mt-0.5">{a.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className={cn("text-xs font-bold",
+                      a.color === "amber" ? "text-amber-800" :
+                      a.color === "rose"  ? "text-red-700" : "text-blue-700"
+                    )}>{a.label}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Action: {a.action}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
-      )}
+
+        {/* ── Bottom 2-col: Pupil history + Quick actions ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Pupil history and profile */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-blue-600">👤</span>
+                <h3 className="text-sm font-bold text-slate-900">Pupil history and profile</h3>
+              </div>
+            </div>
+            {pupilHistory ? (
+              <div className="p-4 flex gap-4">
+                {/* Profile card */}
+                <div className="shrink-0 w-32">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl mb-2">👤</div>
+                  <div className="text-sm font-bold text-slate-900 leading-tight">
+                    {fullName(pupilHistory.pupil.first_name, pupilHistory.pupil.last_name)}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-1 space-y-0.5">
+                    <div>Class: {pupilHistory.pupil.class_name ?? "—"}</div>
+                    <div>Adm No.: {pupilHistory.pupil.admission_number ?? "—"}</div>
+                    <div>Parent: 07XX XXX XXX</div>
+                    <div className="mt-1">
+                      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700">Present</span>
+                    </div>
+                  </div>
+                </div>
+                {/* History table */}
+                <div className="flex-1 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 text-[11px]">
+                        <th className="py-1 px-2 text-left font-medium">Date</th>
+                        <th className="py-1 px-2 text-left font-medium">Arrival</th>
+                        <th className="py-1 px-2 text-left font-medium">Departure</th>
+                        <th className="py-1 px-2 text-left font-medium">SMS</th>
+                        <th className="py-1 px-2 text-left font-medium">Remark</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {pupilHistory.rows.map((r, i) => (
+                        <tr key={i} className="hover:bg-slate-50/70">
+                          <td className="py-1.5 px-2 font-mono text-[11px] text-slate-500">{r.date}</td>
+                          <td className="py-1.5 px-2 font-mono text-[11px] text-slate-700">{r.arrival}</td>
+                          <td className="py-1.5 px-2 font-mono text-[11px] text-slate-700">{r.departure}</td>
+                          <td className="py-1.5 px-2 text-[11px] text-slate-500">{r.sms}</td>
+                          <td className="py-1.5 px-2">
+                            <span className={cn("text-[10px] font-semibold",
+                              r.remark === "Normal" ? "text-slate-500" : "text-red-600"
+                            )}>{r.remark}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-xs text-slate-400">
+                {busy ? "Loading…" : "No pupil data available today"}
+              </div>
+            )}
+          </div>
+
+          {/* Right col: What dashboard shows + Quick actions */}
+          <div className="space-y-4">
+
+            {/* What this dashboard shows */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
+                <span className="text-blue-600">📊</span>
+                <h3 className="text-sm font-bold text-slate-900">What this dashboard shows</h3>
+              </div>
+              <ul className="p-4 space-y-2">
+                {[
+                  "Current pupils on site",
+                  "Pupils already departed",
+                  "Pending departures and missing exit scans",
+                  "SMS status for entry and exit alerts",
+                  "Searchable pupil history and profile",
+                  "Alerts awaiting action and follow-up",
+                ].map(item => (
+                  <li key={item} className="flex items-center gap-2 text-xs text-slate-700">
+                    <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Quick actions */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
+                <span className="text-yellow-500">⚡</span>
+                <h3 className="text-sm font-bold text-slate-900">Quick actions</h3>
+              </div>
+              <div className="p-2">
+                {[
+                  { label: "Search for a pupil",      href: "/dashboard/pupils",     icon: "🔍" },
+                  { label: "View full history",        href: "/dashboard/reports",    icon: "📋" },
+                  { label: "Resend failed SMS",        href: "/dashboard/messages",   icon: "📨" },
+                  { label: "Record a manual correction", href: "/dashboard/attendance", icon: "✏️" },
+                  { label: "Export a report",          href: "/dashboard/reports",    icon: "📊" },
+                  { label: "Check device status",      href: "/dashboard/devices",    icon: "⚙️" },
+                ].map(a => (
+                  <Link
+                    key={a.label}
+                    href={a.href}
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-700 transition-colors group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{a.icon}</span>
+                      <span>{a.label}</span>
+                    </div>
+                    <span className="text-slate-300 group-hover:text-blue-500">›</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

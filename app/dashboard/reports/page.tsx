@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { Device, SmsNotification } from "@/lib/types";
 
@@ -25,26 +25,22 @@ export default function ReportsPage() {
       const today = new Date().toISOString().slice(0, 10);
       const start = `${today}T00:00:00Z`;
       const end = `${today}T23:59:59Z`;
-      const { count: a } = await insforge.database
-        .from("attendance_events").select("id", { count: "exact" })
+      const { count: a } = await supabase.from("attendance_events").select("id", { count: "exact" })
         .eq("school_id", schoolId).eq("event_type", "arrival")
         .gte("event_time", start).lte("event_time", end).limit(1);
-      const { count: d } = await insforge.database
-        .from("attendance_events").select("id", { count: "exact" })
+      const { count: d } = await supabase.from("attendance_events").select("id", { count: "exact" })
         .eq("school_id", schoolId).eq("event_type", "departure")
         .gte("event_time", start).lte("event_time", end).limit(1);
       setArrivals(a ?? 0);
       setDepartures(d ?? 0);
 
-      const { data: smsRows } = await insforge.database
-        .from("sms_notifications").select("status")
+      const { data: smsRows } = await supabase.from("sms_notifications").select("status")
         .eq("school_id", schoolId).gte("queued_at", start).lte("queued_at", end).limit(500);
       const sms = (smsRows as SmsNotification[] | null) ?? [];
       setSmsTotal(sms.length);
       setSmsFailed(sms.filter((s) => s.status === "failed").length);
 
-      const { data: devRows } = await insforge.database
-        .from("devices")
+      const { data: devRows } = await supabase.from("devices")
         .select("id, name, device_type, model, serial_number, status, last_seen_at")
         .eq("school_id", schoolId).order("name", { ascending: true }).limit(50);
       setDevices((devRows as Device[] | null) ?? []);

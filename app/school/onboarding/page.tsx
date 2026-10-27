@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 interface ChecklistItem {
@@ -31,11 +31,10 @@ export default function OnboardingPage() {
   const load = useCallback(async () => {
     if (!schoolId) return;
     // Seed default checklist if empty
-    const { count } = await insforge.database.from("onboarding_checklists")
+    const { count } = await supabase.from("onboarding_checklists")
       .select("id", { count: "exact" }).eq("school_id", schoolId).limit(1);
-    if (!count) await insforge.database.rpc("seed_onboarding_checklist", { p_school_id: schoolId });
-    const { data, error } = await insforge.database
-      .from("onboarding_checklists")
+    if (!count) await supabase.rpc("seed_onboarding_checklist", { p_school_id: schoolId });
+    const { data, error } = await supabase.from("onboarding_checklists")
       .select("id, step_key, step_label, status, notes, completed_at")
       .eq("school_id", schoolId)
       .order("created_at", { ascending: true });
@@ -49,7 +48,7 @@ export default function OnboardingPage() {
     setBusy(true);
     const updates: Record<string, unknown> = { status };
     if (status === "completed") { updates.completed_at = new Date().toISOString(); updates.completed_by = user?.id ?? null; }
-    await insforge.database.from("onboarding_checklists").update(updates).eq("id", item.id);
+    await supabase.from("onboarding_checklists").update(updates).eq("id", item.id);
     setBusy(false);
     void load();
   }

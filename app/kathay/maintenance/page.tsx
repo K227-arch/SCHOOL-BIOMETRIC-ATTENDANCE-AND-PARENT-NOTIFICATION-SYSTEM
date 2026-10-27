@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, formatDateTime } from "@/lib/utils";
 
 interface MaintenanceRow { id: string; category: string; description: string; performed_at: string; school_name: string | null; }
@@ -18,8 +18,7 @@ export default function KathayMaintenancePage() {
   const [desc, setDesc] = useState("");
 
   const load = useCallback(async () => {
-    const { data, error } = await insforge.database
-      .from("maintenance_logs")
+    const { data, error } = await supabase.from("maintenance_logs")
       .select("id, category, description, performed_at, school_id, schools(name)")
       .order("performed_at", { ascending: false }).limit(100);
     if (error) return setError(error.message);
@@ -36,7 +35,7 @@ export default function KathayMaintenancePage() {
     e.preventDefault();
     if (!desc.trim()) return;
     setBusy(true); setError(null);
-    const { error } = await insforge.database.from("maintenance_logs").insert([{
+    const { error } = await supabase.from("maintenance_logs").insert([{
       category: cat, description: desc.trim(), performed_by: user?.id ?? null,
     }]);
     setBusy(false);

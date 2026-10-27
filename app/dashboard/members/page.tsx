@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge, ROLE_LABELS, type StaffRole } from "@/lib/insforge";
+import { supabase, ROLE_LABELS, type StaffRole } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { SchoolMember, Profile, School } from "@/lib/types";
 
@@ -18,8 +18,7 @@ export default function MembersPage() {
   const load = useCallback(async () => {
     if (!schoolId) return;
     setError(null);
-    const { data: mRows, error } = await insforge.database
-      .from("school_members")
+    const { data: mRows, error } = await supabase.from("school_members")
       .select("id, school_id, user_id, role, status, created_at")
       .eq("school_id", schoolId)
       .order("created_at", { ascending: true })
@@ -27,8 +26,7 @@ export default function MembersPage() {
     if (error) return setError(error.message);
     const m = (mRows as SchoolMember[] | null) ?? [];
     setMembers(m);
-    const { data: sRow } = await insforge.database
-      .from("schools")
+    const { data: sRow } = await supabase.from("schools")
       .select("id, name, code")
       .eq("id", schoolId)
       .limit(1);
@@ -41,7 +39,7 @@ export default function MembersPage() {
 
   async function changeRole(m: SchoolMember, role: StaffRole) {
     setError(null);
-    const { error } = await insforge.database.from("school_members").update({ role }).eq("id", m.id);
+    const { error } = await supabase.from("school_members").update({ role }).eq("id", m.id);
     if (error) return setError(error.message);
     void load();
   }
@@ -49,7 +47,7 @@ export default function MembersPage() {
   async function toggleStatus(m: SchoolMember) {
     setError(null);
     const next = m.status === "active" ? "inactive" : "active";
-    const { error } = await insforge.database.from("school_members").update({ status: next }).eq("id", m.id);
+    const { error } = await supabase.from("school_members").update({ status: next }).eq("id", m.id);
     if (error) return setError(error.message);
     void load();
   }

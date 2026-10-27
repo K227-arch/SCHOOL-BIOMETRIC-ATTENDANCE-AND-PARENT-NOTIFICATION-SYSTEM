@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, formatDateTime } from "@/lib/utils";
 
 interface EventRow { id: string; event_type: string; event_time: string; result: string; school_name: string; }
@@ -20,8 +20,7 @@ export default function KathayMonitoringPage() {
     setError(null);
     const today = new Date().toISOString().slice(0, 10);
     try {
-      const { data: evRows } = await insforge.database
-        .from("attendance_events")
+      const { data: evRows } = await supabase.from("attendance_events")
         .select("id, event_type, event_time, result, school_id, schools(name)")
         .order("event_time", { ascending: false }).limit(30);
       setEvents(((evRows ?? []) as Record<string, unknown>[]).map((e) => ({
@@ -30,12 +29,11 @@ export default function KathayMonitoringPage() {
         school_name: ((e.schools as Record<string, string> | null)?.name) ?? "—",
       })));
 
-      const { count: tot } = await insforge.database.from("attendance_events")
+      const { count: tot } = await supabase.from("attendance_events")
         .select("id", { count: "exact" }).gte("event_time", `${today}T00:00:00Z`).limit(1);
       setTotalToday(tot ?? 0);
 
-      const { data: smsRows } = await insforge.database
-        .from("sms_notifications")
+      const { data: smsRows } = await supabase.from("sms_notifications")
         .select("id, status, error, phone_number, queued_at, school_id, schools(name)")
         .eq("status", "failed").order("queued_at", { ascending: false }).limit(50);
       setFailedSms(((smsRows ?? []) as Record<string, unknown>[]).map((s) => ({
@@ -44,7 +42,7 @@ export default function KathayMonitoringPage() {
         school_name: ((s.schools as Record<string, string> | null)?.name) ?? "—",
       })));
 
-      const { count: failC } = await insforge.database.from("sms_notifications")
+      const { count: failC } = await supabase.from("sms_notifications")
         .select("id", { count: "exact" }).eq("status", "failed").limit(1);
       setFailedToday(failC ?? 0);
     } catch (err) { setError(err instanceof Error ? err.message : "Failed to load monitoring"); }

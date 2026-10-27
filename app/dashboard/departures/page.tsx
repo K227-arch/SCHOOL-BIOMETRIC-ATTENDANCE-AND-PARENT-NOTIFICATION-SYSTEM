@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, fullName, formatTime } from "@/lib/utils";
 
 export default function DepartureControlPage() {
@@ -21,7 +21,7 @@ export default function DepartureControlPage() {
   const load = useCallback(async () => {
     if (!schoolId) return;
     const today = new Date().toISOString().slice(0, 10);
-    const { data: evs } = await insforge.database.from("attendance_events")
+    const { data: evs } = await supabase.from("attendance_events")
       .select("id,pupil_id,event_type,event_time,result,gate_id").eq("school_id", schoolId)
       .gte("event_time", today).order("event_time", { ascending: false }).limit(80);
 
@@ -29,7 +29,7 @@ export default function DepartureControlPage() {
     const pids = [...new Set(allEvs.map((e: any) => e.pupil_id))];
     let pMap: Record<string, any> = {};
     if (pids.length) {
-      const { data: p2 } = await insforge.database.from("pupils").select("id,first_name,last_name,class_name,admission_number").in("id", pids).limit(pids.length);
+      const { data: p2 } = await supabase.from("pupils").select("id,first_name,last_name,class_name,admission_number").in("id", pids).limit(pids.length);
       (p2 as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
     }
 
@@ -72,7 +72,7 @@ export default function DepartureControlPage() {
     setBusy(true);
     try {
       const now = new Date().toISOString();
-      await insforge.database.from("attendance_events").insert([{
+      await supabase.from("attendance_events").insert([{
         school_id: schoolId, pupil_id: selected.pupilId, event_type: "departure",
         event_time: now, recorded_time: now, result: "success", source: "manual",
         staff_id: user?.id ?? null,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, timeAgo } from "@/lib/utils";
 
 interface DeviceRow {
@@ -19,8 +19,7 @@ export default function KathayDevicesPage() {
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error } = await insforge.database
-      .from("devices")
+    const { data, error } = await supabase.from("devices")
       .select("id, name, device_type, model, serial_number, status, last_seen_at, school_id, gate_id, schools(name), gates(name)")
       .order("status", { ascending: true })
       .order("last_seen_at", { ascending: false })

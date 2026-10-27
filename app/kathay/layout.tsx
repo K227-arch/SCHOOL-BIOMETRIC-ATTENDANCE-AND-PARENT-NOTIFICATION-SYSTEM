@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/kathay", label: "Platform Overview", icon: "🌐" },
+  { href: "/kathay/signups", label: "Signup Approvals", icon: "📋" },
   { href: "/kathay/schools", label: "School Onboarding", icon: "🏫" },
   { href: "/kathay/devices", label: "Device Integration", icon: "🖥" },
   { href: "/kathay/monitoring", label: "Monitoring", icon: "📡" },

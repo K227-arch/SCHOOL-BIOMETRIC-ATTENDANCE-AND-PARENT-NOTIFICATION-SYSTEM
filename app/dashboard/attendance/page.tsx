@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, fullName, formatTime } from "@/lib/utils";
 
 export default function LiveAttendancePage() {
@@ -27,9 +27,9 @@ export default function LiveAttendancePage() {
     if (!schoolId) return;
     const today = new Date().toISOString().slice(0, 10);
     const [{ data: evs }, { data: pRows }, { data: gRows }] = await Promise.all([
-      insforge.database.from("attendance_events").select("id,pupil_id,event_type,event_time,result,gate_id,source").eq("school_id", schoolId).gte("event_time", today).order("event_time", { ascending: false }).limit(60),
-      insforge.database.from("pupils").select("id,first_name,last_name,admission_number,class_name").eq("school_id", schoolId).eq("status", "active").order("last_name").limit(400),
-      insforge.database.from("gates").select("id,name,direction").eq("school_id", schoolId).limit(20),
+      supabase.from("attendance_events").select("id,pupil_id,event_type,event_time,result,gate_id,source").eq("school_id", schoolId).gte("event_time", today).order("event_time", { ascending: false }).limit(60),
+      supabase.from("pupils").select("id,first_name,last_name,admission_number,class_name").eq("school_id", schoolId).eq("status", "active").order("last_name").limit(400),
+      supabase.from("gates").select("id,name,direction").eq("school_id", schoolId).limit(20),
     ]);
     setPupils((pRows as any[]) ?? []);
     setGates((gRows as any[]) ?? []);
@@ -38,7 +38,7 @@ export default function LiveAttendancePage() {
     const pids = [...new Set(allEvs.map((e: any) => e.pupil_id))];
     let pMap: Record<string, any> = {};
     if (pids.length) {
-      const { data: p2 } = await insforge.database.from("pupils").select("id,first_name,last_name,admission_number,class_name").in("id", pids).limit(pids.length);
+      const { data: p2 } = await supabase.from("pupils").select("id,first_name,last_name,admission_number,class_name").in("id", pids).limit(pids.length);
       (p2 as any[] ?? []).forEach((p: any) => (pMap[p.id] = p));
     }
     const gMap: Record<string, string> = {};
@@ -47,7 +47,7 @@ export default function LiveAttendancePage() {
     const evIds = allEvs.map((e: any) => e.id);
     let smsMap: Record<string, string> = {};
     if (evIds.length) {
-      const { data: smsRows } = await insforge.database.from("sms_notifications").select("attendance_event_id,status").in("attendance_event_id", evIds).limit(evIds.length);
+      const { data: smsRows } = await supabase.from("sms_notifications").select("attendance_event_id,status").in("attendance_event_id", evIds).limit(evIds.length);
       (smsRows as any[] ?? []).forEach((s: any) => (smsMap[s.attendance_event_id] = s.status));
     }
 
@@ -86,9 +86,9 @@ export default function LiveAttendancePage() {
     try {
       const now = new Date().toISOString();
       const since = new Date(Date.now() - 120_000).toISOString();
-      const { data: dup } = await insforge.database.from("attendance_events").select("id").eq("school_id", schoolId).eq("pupil_id", pupilId).eq("event_type", eventType).gte("event_time", since).limit(1);
+      const { data: dup } = await supabase.from("attendance_events").select("id").eq("school_id", schoolId).eq("pupil_id", pupilId).eq("event_type", eventType).gte("event_time", since).limit(1);
       const isDup = ((dup as any[])?.length ?? 0) > 0;
-      const { error } = await insforge.database.from("attendance_events").insert([{
+      const { error } = await supabase.from("attendance_events").insert([{
         school_id: schoolId, pupil_id: pupilId, gate_id: gateId || null,
         event_type: eventType, event_time: now, recorded_time: now,
         result: isDup ? "duplicate_suppressed" : "success", source: "manual", staff_id: user?.id ?? null,

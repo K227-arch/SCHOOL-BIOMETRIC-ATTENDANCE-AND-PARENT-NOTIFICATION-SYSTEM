@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import type { StaffRole } from "@/lib/insforge";
+import type { StaffRole } from "@/lib/supabase";
 
 /**
  * Staff sign-up flow.
@@ -60,7 +60,7 @@ export default function SignupPage() {
       return;
     }
     setBusy(true);
-    const role: StaffRole = isKathay ? "kathay_admin" : "gate_staff";
+    const role: StaffRole = isKathay ? "kathay_admin" : "school_admin";
     const { error } = await completeSignup(role, isKathay ? undefined : schoolCode.trim());
     setBusy(false);
     if (error) { setError(error); return; }

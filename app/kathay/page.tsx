@@ -1,164 +1,205 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
-import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { cn, formatDate } from "@/lib/utils";
+
+interface SchoolSummary {
+  id: string;
+  name: string;
+  code: string | null;
+  district: string | null;
+  country: string | null;
+  status: string;
+  subscription_plan: string | null;
+  created_at: string;
+  login_email?: string | null;
+  pupil_count?: number;
+}
 
 export default function KathayAdminPage() {
-  const { loading } = useAuth();
-  const [schools, setSchools] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState("all");
+  const { context, loading } = useAuth();
+  const [schools, setSchools]       = useState<SchoolSummary[]>([]);
+  const [search, setSearch]         = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all"|"active"|"inactive">("all");
+  const [totalPupils, setTotalPupils]   = useState<number>(0);
+  const [totalDevices, setTotalDevices] = useState<number>(0);
+  const [totalSms, setTotalSms]         = useState<number>(0);
 
   const load = useCallback(async () => {
-    const { data } = await insforge.database.from("schools").select("id,name,status,created_at").order("created_at", { ascending: false }).limit(50);
-    setSchools((data as any[]) ?? []);
+    // Schools + credentials
+    const [{ data: sData }, { data: cData }, { data: pData }, { data: dData }, { data: smsData }] = await Promise.all([
+      supabase.from("schools").select("id,name,code,district,country,status,subscription_plan,created_at").order("created_at", { ascending: false }).limit(200),
+      supabase.from("school_credentials").select("school_id,login_email").limit(300),
+      supabase.from("pupils").select("id,school_id").limit(5000),
+      supabase.from("devices").select("id").limit(500),
+      supabase.from("sms_notifications").select("id").limit(5000),
+    ]);
+
+    const credMap = new Map((cData as any[] ?? []).map((c: any) => [c.school_id, c.login_email]));
+    const pupils  = (pData as any[] ?? []);
+    const pupilsBySchool = new Map<string, number>();
+    pupils.forEach((p: any) => pupilsBySchool.set(p.school_id, (pupilsBySchool.get(p.school_id) ?? 0) + 1));
+
+    const rows = (sData as any[] ?? []).map((s: any) => ({
+      ...s,
+      login_email:  credMap.get(s.id) ?? null,
+      pupil_count:  pupilsBySchool.get(s.id) ?? 0,
+    }));
+
+    setSchools(rows);
+    setTotalPupils(pupils.length);
+    setTotalDevices((dData as any[] ?? []).length);
+    setTotalSms((smsData as any[] ?? []).length);
   }, []);
 
   useEffect(() => { if (!loading) void load(); }, [loading, load]);
 
-  const totalSchools = schools.length;
-  const activeSchools = schools.filter(s => s.status === "active").length;
+  const activeSchools   = schools.filter(s => s.status === "active").length;
+  const inactiveSchools = schools.length - activeSchools;
 
-  const filteredSchools = schools.filter(s =>
-    s.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = schools.filter(s => {
+    const m = s.name.toLowerCase().includes(search.toLowerCase()) ||
+              (s.code ?? "").toLowerCase().includes(search.toLowerCase()) ||
+              (s.district ?? "").toLowerCase().includes(search.toLowerCase());
+    const sf = statusFilter === "all" || s.status === statusFilter;
+    return m && sf;
+  });
 
-  const stageColor = (stage: string) =>
-    stage === "Live Operations" ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
-    stage === "Controlled Pilot" ? "bg-blue-50 text-blue-800 border-blue-200" :
-    "bg-amber-50 text-amber-800 border-amber-200";
+  const planBadge = (plan: string | null) =>
+    plan === "enterprise" ? "bg-purple-50 text-purple-700 border-purple-200" :
+    plan === "growth"     ? "bg-blue-50 text-blue-700 border-blue-200" :
+                            "bg-slate-100 text-slate-600 border-slate-200";
 
   return (
     <div className="space-y-5">
-      {/* Central admin banner */}
+
+      {/* Platform banner */}
       <div className="bg-slate-900 text-white rounded-xl p-5 border border-slate-800 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded bg-blue-600 text-white flex items-center justify-center text-xs font-bold">K</span>
-            <h1 className="text-lg font-bold tracking-tight text-white">Kathay Technologies Multi-School Platform Operations</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="w-6 h-6 rounded bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0">K</span>
+            <h1 className="text-base font-bold tracking-tight text-white">Kathay Technologies · Platform Operations</h1>
             <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-400/30 font-semibold">MANAGED SAAS</span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">Global tenant cluster · Data strictly isolated per school database · Managed hardware gateways, SMPP carrier routing, and pilot delivery tracking.</p>
+          <p className="text-xs text-slate-400 mt-1.5">
+            Welcome back, <span className="text-white font-medium">{context?.user_name ?? "Admin"}</span>.
+            Multi-school tenant cluster · per-school data isolation · SMPP carrier routing.
+          </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-mono">
-          <div className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-emerald-400">SMS Gateways: NOMINAL</div>
-          <div className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">Cloud Backup: Verified</div>
+        <div className="flex items-center gap-2 text-xs font-mono shrink-0">
+          <div className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-emerald-400">SMS: NOMINAL</div>
+          <div className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">Backup: OK</div>
         </div>
       </div>
 
-      {/* Global platform metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Total Schools", value: totalSchools, sub: `${activeSchools} live & piloting`, icon: "🏫", color: "blue" },
-          { label: "Enrolled Pupils", value: "1,248", sub: "Across all campuses", icon: "📈", color: "emerald" },
-          { label: "Gate Hardware Fleet", value: 18, sub: "100% online / nominal", icon: "⌨", color: "purple" },
-          { label: "Monthly SMS Metered", value: "4,821", sub: "99.8% delivery SLA", icon: "📡", color: "blue" },
-          { label: "Open Kathay Tickets", value: 2, sub: "Device firmware patch", icon: "⚠", color: "amber" },
+          { label: "Total Schools",    value: schools.length,  sub: `${activeSchools} active · ${inactiveSchools} inactive`, icon: "🏫", accent: "text-blue-700" },
+          { label: "Enrolled Pupils",  value: totalPupils,     sub: "Across all schools",        icon: "🎓", accent: "text-slate-900" },
+          { label: "Hardware Devices", value: totalDevices,    sub: "Biometric & RFID readers",  icon: "🖥",  accent: "text-purple-700" },
+          { label: "SMS Sent",         value: totalSms,        sub: "Lifetime notifications",    icon: "📱", accent: "text-emerald-700" },
         ].map((m, i) => (
           <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">{m.label}</span>
               <span className="text-base">{m.icon}</span>
             </div>
-            <div className={cn("text-2xl font-mono font-extrabold mt-1 tabular-nums",
-              m.color === "emerald" ? "text-slate-900" : m.color === "blue" ? "text-blue-700" : m.color === "amber" ? "text-amber-600" : "text-slate-900")}>
-              {m.value}
+            <div className={cn("text-2xl font-mono font-extrabold mt-1 tabular-nums", m.accent)}>
+              {m.value.toLocaleString()}
             </div>
-            <div className={cn("text-[10px] mt-1", m.color === "emerald" ? "text-emerald-600 font-medium" : "text-slate-500")}>{m.sub}</div>
+            <div className="text-[10px] text-slate-500 mt-1">{m.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Commercial revenue model */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-emerald-600">💰</span>
-            <h3 className="text-sm font-bold text-slate-900">Commercial Framework &amp; Recurring Revenue Tracking</h3>
-          </div>
-          <span className="text-xs font-mono text-slate-500">ARR = (Schools × Monthly Fee × 12) + (Schools × Annual Fee)</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          {[
-            { label: "Annual Recurring Revenue (ARR):", value: "$54,200 / yr", sub: "Based on 3 active annual contracts & 1 monthly plan", color: "text-slate-900" },
-            { label: "Onboarding Pipeline Value:", value: "$18,500", sub: "Turnstile hardware supply & installation fees", color: "text-blue-700" },
-            { label: "Net Carrier Margin:", value: "32.4%", sub: "SMPP bulk tariff vs bundled allowance usage", color: "text-emerald-700" },
-          ].map(r => (
-            <div key={r.label} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-              <span className="text-slate-500 font-medium">{r.label}</span>
-              <div className={cn("text-xl font-bold font-mono", r.color)}>{r.value}</div>
-              <div className="text-[10px] text-slate-400">{r.sub}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* School directory */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden p-4 space-y-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-bold text-slate-900">Customer School Tenancy Directory</h3>
-            <select value={stageFilter} onChange={e => setStageFilter(e.target.value)} className="input" style={{ width: "auto" }}>
-              <option value="all">All Stages</option>
-              <option value="Live Operations">Live Operations</option>
-              <option value="Controlled Pilot">Controlled Pilot</option>
-              <option value="Core System Build">Core System Build</option>
-            </select>
+            <h3 className="text-sm font-bold text-slate-900">School Directory</h3>
+            <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg">
+              {(["all","active","inactive"] as const).map(f => (
+                <button key={f} onClick={() => setStatusFilter(f)}
+                  className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
+                    statusFilter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                  {f === "all" ? `All (${schools.length})` : f === "active" ? `Active (${activeSchools})` : `Inactive (${inactiveSchools})`}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="relative max-w-xs">
-            <span className="absolute left-2.5 top-2.5 text-slate-400 text-xs">🔍</span>
-            <input type="text" placeholder="Search schools..." value={search} onChange={e => setSearch(e.target.value)} className="input pl-8" />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+              <input type="text" placeholder="Search schools…" value={search} onChange={e => setSearch(e.target.value)}
+                className="pl-7 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 placeholder:text-slate-400 w-44" />
+            </div>
+            <Link href="/kathay/schools"
+              className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors whitespace-nowrap">
+              + Onboard School
+            </Link>
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-y border-slate-200 text-slate-500 font-medium text-[11px]">
+            <thead className="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500 font-medium">
               <tr>
-                <th className="py-2.5 px-4">School &amp; Code</th>
+                <th className="py-2.5 px-4">School</th>
                 <th className="py-2.5 px-4">Location</th>
-                <th className="py-2.5 px-4 font-mono">Pupils</th>
-                <th className="py-2.5 px-4">Onboarding Stage</th>
-                <th className="py-2.5 px-4">Subscription Plan</th>
-                <th className="py-2.5 px-4">SMS Usage</th>
+                <th className="py-2.5 px-4">Login Email</th>
+                <th className="py-2.5 px-4 text-right">Pupils</th>
+                <th className="py-2.5 px-4">Plan</th>
+                <th className="py-2.5 px-4">Status</th>
+                <th className="py-2.5 px-4">Onboarded</th>
                 <th className="py-2.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSchools.length === 0 && (
-                <tr><td colSpan={7} className="py-10 text-center text-slate-400">
-                  {schools.length === 0 ? "No schools onboarded yet" : "No matching schools"}
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} className="py-12 text-center text-slate-400">
+                  {schools.length === 0 ? (
+                    <div className="space-y-2">
+                      <div className="text-3xl">🏫</div>
+                      <p>No schools onboarded yet.</p>
+                      <Link href="/kathay/schools" className="text-blue-600 hover:underline font-medium">Onboard your first school →</Link>
+                    </div>
+                  ) : "No schools match your search."}
                 </td></tr>
               )}
-              {filteredSchools.map(school => (
-                <tr key={school.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3 px-4 font-medium text-slate-900 whitespace-nowrap">
-                    <div className="font-semibold">{school.name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{school.id.slice(0,8).toUpperCase()}</div>
+              {filtered.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3 px-4">
+                    <div className="font-semibold text-slate-900">{s.name}</div>
+                    <div className="text-[10px] text-slate-400 font-mono">{s.code ?? "—"}</div>
                   </td>
-                  <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
-                    <div>Uganda</div><div className="text-[10px] text-slate-400">East Africa</div>
+                  <td className="py-3 px-4 text-slate-600">
+                    <div>{s.district ?? "—"}</div>
+                    <div className="text-[10px] text-slate-400">{s.country ?? "Uganda"}</div>
                   </td>
-                  <td className="py-3 px-4 font-mono font-medium text-slate-800">—</td>
-                  <td className="py-3 px-4 whitespace-nowrap">
-                    <span className={cn("inline-block px-2 py-0.5 rounded text-[10px] font-semibold border",
-                      school.status === "active" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200")}>
-                      {school.status === "active" ? "Live Operations" : "Controlled Pilot"}
+                  <td className="py-3 px-4 text-slate-600">{s.login_email ?? <span className="text-slate-400">—</span>}</td>
+                  <td className="py-3 px-4 text-right font-mono font-medium text-slate-800">{(s.pupil_count ?? 0).toLocaleString()}</td>
+                  <td className="py-3 px-4">
+                    <span className={cn("inline-block px-2 py-0.5 rounded text-[10px] font-semibold border", planBadge(s.subscription_plan))}>
+                      {(s.subscription_plan ?? "starter").charAt(0).toUpperCase() + (s.subscription_plan ?? "starter").slice(1)}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-slate-700">Annual SaaS</td>
-                  <td className="py-3 px-4 font-mono text-[11px]">
-                    <div className="text-slate-800">— / 500</div>
-                    <div className="w-24 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-                      <div className="bg-blue-600 h-full rounded-full" style={{ width: "20%" }} />
-                    </div>
+                  <td className="py-3 px-4">
+                    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                      s.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", s.status === "active" ? "bg-emerald-500" : "bg-slate-400")} />
+                      {s.status === "active" ? "Active" : "Inactive"}
+                    </span>
                   </td>
-                  <td className="py-3 px-4 text-right whitespace-nowrap">
-                    <button className="px-2.5 py-1 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 transition-colors flex items-center gap-1 ml-auto cursor-pointer">
-                      Open School Portal →
-                    </button>
+                  <td className="py-3 px-4 text-slate-500">{formatDate(s.created_at)}</td>
+                  <td className="py-3 px-4 text-right">
+                    <Link href="/kathay/schools"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 transition-colors">
+                      Manage →
+                    </Link>
                   </td>
                 </tr>
               ))}

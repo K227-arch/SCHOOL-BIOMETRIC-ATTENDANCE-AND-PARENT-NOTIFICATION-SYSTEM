@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export default function KathayBillingPage() {
@@ -11,8 +11,8 @@ export default function KathayBillingPage() {
 
   const load = useCallback(async () => {
     const [{ count: total }, { count: active }] = await Promise.all([
-      insforge.database.from("schools").select("id", { count: "exact" }).limit(1),
-      insforge.database.from("schools").select("id", { count: "exact" }).eq("status", "active").limit(1),
+      supabase.from("schools").select("id", { count: "exact" }).limit(1),
+      supabase.from("schools").select("id", { count: "exact" }).eq("status", "active").limit(1),
     ]);
     setSchoolCount(total ?? 0);
     setActiveCount(active ?? 0);

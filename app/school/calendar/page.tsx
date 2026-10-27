@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, formatDate } from "@/lib/utils";
 import type { CalendarEntry } from "@/lib/types";
 
@@ -25,8 +25,7 @@ export default function CalendarPage() {
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const { data, error } = await insforge.database
-      .from("calendars").select("id, date, day_type, school_hours_start, school_hours_end, notes")
+    const { data, error } = await supabase.from("calendars").select("id, date, day_type, school_hours_start, school_hours_end, notes")
       .eq("school_id", schoolId).order("date", { ascending: false }).limit(100);
     if (error) return setError(error.message);
     setEntries((data as CalendarEntry[] | null) ?? []);
@@ -38,7 +37,7 @@ export default function CalendarPage() {
     e.preventDefault();
     if (!schoolId || !date) return;
     setBusy(true); setError(null);
-    const { error } = await insforge.database.from("calendars").insert([{
+    const { error } = await supabase.from("calendars").insert([{
       school_id: schoolId, date, day_type: dayType, notes: notes || null,
     }]);
     setBusy(false);

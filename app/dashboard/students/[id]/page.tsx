@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import { cn, fullName, formatTime, formatDateTime, SMS_STATUS_STYLES } from "@/lib/utils";
 import type { Pupil, Guardian, FollowUp } from "@/lib/types";
 
@@ -36,21 +36,21 @@ export default function StudentProfilePage() {
 
   const load = useCallback(async () => {
     if (!schoolId || !pupilId) return;
-    const { data: pRow, error: pErr } = await insforge.database.from("pupils")
+    const { data: pRow, error: pErr } = await supabase.from("pupils")
       .select("*").eq("id", pupilId).eq("school_id", schoolId).limit(1);
     if (pErr) return setError(pErr.message);
     setPupil((pRow as Pupil[] | null)?.[0] ?? null);
 
     const [{ data: gRows }, { data: evRows }, { data: smsRows }, { data: fuRows }] = await Promise.all([
-      insforge.database.from("guardians").select("*").eq("pupil_id", pupilId).limit(5),
-      insforge.database.from("attendance_events")
+      supabase.from("guardians").select("*").eq("pupil_id", pupilId).limit(5),
+      supabase.from("attendance_events")
         .select("event_type, event_time, result")
         .eq("pupil_id", pupilId).eq("result", "success")
         .order("event_time", { ascending: false }).limit(60),
-      insforge.database.from("sms_notifications")
+      supabase.from("sms_notifications")
         .select("id, message_type, status, phone_number, message_body, queued_at")
         .eq("pupil_id", pupilId).order("queued_at", { ascending: false }).limit(30),
-      insforge.database.from("follow_ups")
+      supabase.from("follow_ups")
         .select("id, exception_type, status, reason, created_at")
         .eq("pupil_id", pupilId).order("created_at", { ascending: false }).limit(20),
     ]);

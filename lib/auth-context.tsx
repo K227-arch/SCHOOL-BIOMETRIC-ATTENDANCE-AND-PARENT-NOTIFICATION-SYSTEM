@@ -2,12 +2,10 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
-import { insforge, type StaffRole } from './insforge'
+import { supabase, type StaffRole } from './supabase'
 import type { UserContext } from './types'
 
-// Only pages that truly never need any auth context at all.
-// /auth/redirect is intentionally NOT here — it needs full context to route correctly.
-const PUBLIC_PATHS = ['/', '/login', '/signup', '/parent/login', '/parent']
+const PUBLIC_PATHS = ['/', '/login', '/signup', '/auth/redirect', '/auth/callback']
 
 function isPublicPath(p: string) {
   return PUBLIC_PATHS.some(pub => p === pub || p.startsWith(pub + '/'))
@@ -40,15 +38,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
   const refresh = useCallback(async () => {
-    const { data, error } = await insforge.auth.getCurrentUser()
-    if (error || !data?.user) {
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error || !user) {
       setState({ user: null, context: null, loading: false })
       return
     }
-    const { data: ctx } = await insforge.database.rpc('current_user_context')
+    const { data: ctx } = await supabase.rpc('current_user_context')
     setState({
-      user: { id: data.user.id, email: data.user.email ?? null },
-      context: (ctx as UserContext | undefined) ?? null,
+      user: { id: user.id, email: user.email ?? null },
+      context: (ctx as UserContext | null) ?? null,
       loading: false,
     })
   }, [])
@@ -56,67 +54,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
-    void (async () => {
-      const { data, error } = await insforge.auth.getCurrentUser()
+    // Listen to Supabase auth state changes (handles OTP callback, OAuth, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return
-
-      if (error || !data?.user) {
+      if (!session?.user) {
         setState({ user: null, context: null, loading: false })
         return
       }
-
-      const user = { id: data.user.id, email: data.user.email ?? null }
-
-      if (isPublicPath(pathname)) {
-        // Public page — unblock render immediately; fetch context in background
-        setState({ user, context: null, loading: false })
-        const { data: ctx } = await insforge.database.rpc('current_user_context')
-        if (!cancelled) {
-          setState({ user, context: (ctx as UserContext | undefined) ?? null, loading: false })
-        }
-        return
+      const user = { id: session.user.id, email: session.user.email ?? null }
+      let { data: ctx } = await supabase.rpc('current_user_context')
+      // Auto-bootstrap admin: if user has no role, try make_kathay_admin
+      if (ctx && !(ctx as any)?.is_platform_admin && !(ctx as any)?.role && user.email) {
+        await supabase.rpc('make_kathay_admin', { p_email: user.email })
+        const { data: ctx2 } = await supabase.rpc('current_user_context')
+        ctx = ctx2
       }
-
-      // Protected page (including /auth/redirect) — wait for full context
-      const { data: ctx } = await insforge.database.rpc('current_user_context')
       if (cancelled) return
-      setState({
-        user,
-        context: (ctx as UserContext | undefined) ?? null,
-        loading: false,
-      })
+      if (isPublicPath(pathname)) {
+        setState({ user, context: null, loading: false })
+      }
+      if (!cancelled) setState({ user, context: (ctx as UserContext | null) ?? null, loading: false })
+    })
+
+    // Also check existing session on mount
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (cancelled) return
+      if (!user) { setState({ user: null, context: null, loading: false }); return }
+      const authUser = { id: user.id, email: user.email ?? null }
+      if (isPublicPath(pathname)) {
+        setState({ user: authUser, context: null, loading: false })
+        let { data: ctx } = await supabase.rpc('current_user_context')
+        // Auto-bootstrap admin: if user has no role, try make_kathay_admin
+        if (ctx && !(ctx as any)?.is_platform_admin && !(ctx as any)?.role && user.email) {
+          await supabase.rpc('make_kathay_admin', { p_email: user.email })
+          const { data: ctx2 } = await supabase.rpc('current_user_context')
+          ctx = ctx2
+        }
+        if (!cancelled) setState({ user: authUser, context: (ctx as UserContext | null) ?? null, loading: false })
+      } else {
+        let { data: ctx } = await supabase.rpc('current_user_context')
+        if (ctx && !(ctx as any)?.is_platform_admin && !(ctx as any)?.role && user.email) {
+          await supabase.rpc('make_kathay_admin', { p_email: user.email })
+          const { data: ctx2 } = await supabase.rpc('current_user_context')
+          ctx = ctx2
+        }
+        if (!cancelled) setState({ user: authUser, context: (ctx as UserContext | null) ?? null, loading: false })
+      }
     })()
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // signIn: authenticates then refreshes context once
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await insforge.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
     await refresh()
     return { error: null }
   }, [refresh])
 
   const signUp = useCallback(async (email: string, password: string, name: string) => {
-    const { data, error } = await insforge.auth.signUp({ email, password, name })
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { name, full_name: name } }
+    })
     if (error) return { error: error.message, requireVerification: false }
-    if (data?.requireEmailVerification) return { error: null, requireVerification: true }
+    // Supabase requires email confirmation by default
+    if (data.user && !data.session) return { error: null, requireVerification: true }
     await refresh()
     return { error: null, requireVerification: false }
   }, [refresh])
 
   const verifyEmail = useCallback(async (email: string, otp: string) => {
-    const { error } = await insforge.auth.verifyEmail({ email, otp })
+    const { error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' })
     if (error) return { error: error.message }
     await refresh()
     return { error: null }
   }, [refresh])
 
-  // completeSignup: staff join a school by code, or become kathay_admin
   const completeSignup = useCallback(async (role: StaffRole, schoolCode?: string) => {
-    const { data, error } = await insforge.database.rpc('complete_signup', {
+    const { data, error } = await supabase.rpc('complete_signup', {
       p_role: role,
       p_school_name: null,
       p_school_code: schoolCode ?? null,
@@ -127,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const signOut = useCallback(async () => {
-    await insforge.auth.signOut()
+    await supabase.auth.signOut()
     setState({ user: null, context: null, loading: false })
   }, [])
 

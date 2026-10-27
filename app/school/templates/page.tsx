@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { insforge } from "@/lib/insforge";
+import { supabase } from "@/lib/supabase";
 import type { NotificationTemplate } from "@/lib/types";
 
 const DEFAULTS = {
@@ -21,8 +21,7 @@ export default function SMSTemplatesPage() {
 
   const load = useCallback(async () => {
     if (!schoolId) return;
-    const { data, error } = await insforge.database
-      .from("notification_templates").select("*")
+    const { data, error } = await supabase.from("notification_templates").select("*")
       .eq("school_id", schoolId).order("template_type");
     if (error) return setError(error.message);
     const t = (data as NotificationTemplate[] | null) ?? [];
@@ -39,11 +38,11 @@ export default function SMSTemplatesPage() {
     setBusy(true); setError(null); setSaved(false);
     const existing = templates.find((t) => t.template_type === type);
     if (existing) {
-      const { error } = await insforge.database.from("notification_templates")
+      const { error } = await supabase.from("notification_templates")
         .update({ template_body: editing[type] }).eq("id", existing.id);
       if (error) { setBusy(false); return setError(error.message); }
     } else {
-      const { error } = await insforge.database.from("notification_templates").insert([{
+      const { error } = await supabase.from("notification_templates").insert([{
         school_id: schoolId, template_type: type, template_body: editing[type] || DEFAULTS[type], language: "en",
       }]);
       if (error) { setBusy(false); return setError(error.message); }

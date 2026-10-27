@@ -3,161 +3,256 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-
-type Portal = "school" | "parent" | "kathay";
-type KathayStep = "request" | "verify";
-
-const PANELS = {
-  school: {
-    grad: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)",
-    label: "SCHOOL PORTAL",
-    headline: <>Attendance,<br />simplified.</>,
-    sub: "Biometric gate scans, real-time attendance, parent SMS and departure control — all in one place.",
-    features: [
-      { icon: "👆", text: "Fingerprint & RFID gate readers" },
-      { icon: "💬", text: "Instant parent SMS notifications" },
-      { icon: "🛡",  text: "Safeguarding-first departure control" },
-    ],
-  },
-  parent: {
-    grad: "linear-gradient(135deg, #064e3b 0%, #059669 50%, #34d399 100%)",
-    label: "PARENT PORTAL",
-    headline: <>Your child.<br />Always safe.</>,
-    sub: "Receive instant SMS alerts when your child arrives and leaves school. Safe, simple, always on.",
-    features: [
-      { icon: "📱", text: "SMS alerts under 3 seconds" },
-      { icon: "✔",  text: "Arrival and safe departure confirmed" },
-      { icon: "📋", text: "Full attendance history" },
-    ],
-  },
-  kathay: {
-    grad: "linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #6366f1 100%)",
-    label: "PLATFORM ADMIN",
-    headline: <>One platform.<br />Every school.</>,
-    sub: "Manage all schools, devices, SMS carriers and onboarding from a single secure console.",
-    features: [
-      { icon: "🏫", text: "Multi-school tenant management" },
-      { icon: "🖥",  text: "Device & hardware fleet monitoring" },
-      { icon: "📊", text: "Revenue and carrier analytics" },
-    ],
-  },
-};
+import { supabase } from "@/lib/supabase";
+import ParticleField from "@/components/ui/particle-field";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, refresh } = useAuth();
+  const { signIn } = useAuth();
 
-  const [portal, setPortal]     = useState<Portal>("school");
-  const [email, setEmail]       = useState("");
+  // ── Tab state: "school" | "kathay" | "signup" ──
+  const [tab, setTab] = useState<"school" | "kathay" | "signup">("school");
+
+  // ── School sign-in form ──
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPwd, setShowPwd]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [busy, setBusy]         = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
 
-  // Kathay OTP flow
-  const [kathayStep, setKathayStep]   = useState<KathayStep>("request");
+  // ── Kathay form ──
   const [kathayEmail, setKathayEmail] = useState("");
-  const [otp, setOtp]                 = useState("");
-  const [countdown, setCountdown]     = useState(0);
+  const [linkSent, setLinkSent] = useState(false);
 
-  function startCooldown() {
-    setCountdown(60);
-    const id = setInterval(() => setCountdown(p => { if (p <= 1) { clearInterval(id); return 0; } return p - 1; }), 1000);
+  // ── Sign up form ──
+  const [suSchoolName, setSuSchoolName] = useState("");
+  const [suName, setSuName] = useState("");
+  const [suEmail, setSuEmail] = useState("");
+  const [suPassword, setSuPassword] = useState("");
+  const [suPhone, setSuPhone] = useState("");
+  const [suDone, setSuDone] = useState(false);
+
+  // ── Shared ──
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function resetTab() {
+    setError("");
+    setLinkSent(false);
+    setSuDone(false);
   }
 
-  function switchPortal(p: Portal) {
-    setPortal(p); setError(null); setEmail(""); setPassword("");
-    setKathayStep("request"); setKathayEmail(""); setOtp(""); setCountdown(0);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
+  // ── School sign in ──
+  async function handleSchoolSignIn(e: React.FormEvent) {
     e.preventDefault();
-    setError(null); setBusy(true);
+    setError("");
+    setBusy(true);
+    const { error } = await signIn(email.trim(), password);
+    setBusy(false);
+    if (error) {
+      setError(error);
+      return;
+    }
+    router.push("/auth/redirect");
+  }
+
+  // ── Kathay send magic link ──
+  async function handleKathaySendLink(e: React.FormEvent) {
+    e.preventDefault();
+    if (!kathayEmail.trim()) {
+      setError("Enter your admin email.");
+      return;
+    }
+    setError("");
+    setBusy(true);
     try {
-      const { error } = await signIn(email.trim(), password);
+      // emailRedirectTo points to the Site URL root (/).
+      // The homepage detects the ?code= or #access_token= param and
+      // forwards to /auth/callback which handles session exchange.
+      const origin = window.location.origin;
+      const { error } = await supabase.auth.signInWithOtp({
+        email: kathayEmail.trim(),
+        options: {
+          emailRedirectTo: origin + "/",
+          shouldCreateUser: true,
+        },
+      });
       setBusy(false);
-      if (error) { setError(error); return; }
-      router.push(portal === "parent" ? "/parent" : "/auth/redirect");
-    } catch (err: any) {
+      if (error) {
+        setError(error.message || "Failed to send link.");
+        return;
+      }
+      setLinkSent(true);
+    } catch {
       setBusy(false);
-      setError(err?.message ?? "An unexpected error occurred.");
+      setError("Network error. Check your connection.");
     }
   }
 
-  /* ── Kathay: send OTP ── */
-  async function handleSendCode(e: React.FormEvent) {
+  // ── School sign up: create auth user + submit signup request ──
+  async function handleSchoolSignUp(e: React.FormEvent) {
     e.preventDefault();
-    if (!kathayEmail.trim()) { setError("Enter your admin email address."); return; }
-    setError(null); setBusy(true);
+    if (suPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setError("");
+    setBusy(true);
     try {
-      const { insforge: client } = await import("@/lib/insforge");
-      const { error } = await client.auth.signInWithOtp({ email: kathayEmail.trim() });
+      // 1. Create auth account
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
+        email: suEmail.trim(),
+        password: suPassword,
+        options: { data: { name: suName.trim(), full_name: suName.trim() } },
+      });
+
+      if (authErr) {
+        setBusy(false);
+        setError(authErr.message || "Failed to create account.");
+        return;
+      }
+
+      // If Supabase requires email confirmation, we still submit the request
+      // — the user will confirm email later, the request is already queued.
+
+      // 2. Submit signup request (creates a pending row)
+      //    If session wasn't created (email confirmation required), sign in
+      //    temporarily to run the RPC, then sign out.
+      let rpcError: string | null = null;
+
+      if (authData.session) {
+        // Session created — call RPC directly
+        const { error: rErr } = await supabase.rpc("submit_school_signup", {
+          p_school_name: suSchoolName.trim(),
+          p_admin_name: suName.trim(),
+          p_phone: suPhone.trim() || null,
+        });
+        rpcError = rErr?.message ?? null;
+      } else {
+        // Email confirmation required — sign in with password to get a session,
+        // submit the request, then the user will be in "pending" state.
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: suEmail.trim(),
+          password: suPassword,
+        });
+        if (signInErr) {
+          // Can't sign in yet (email not confirmed) — still show pending
+          setBusy(false);
+          setSuDone(true);
+          return;
+        }
+        const { error: rErr } = await supabase.rpc("submit_school_signup", {
+          p_school_name: suSchoolName.trim(),
+          p_admin_name: suName.trim(),
+          p_phone: suPhone.trim() || null,
+        });
+        rpcError = rErr?.message ?? null;
+      }
+
       setBusy(false);
-      if (error) { setError(error.message ?? "Failed to send code. Try again."); return; }
-      setKathayStep("verify");
-      startCooldown();
-    } catch (err: any) {
+      if (rpcError) {
+        setError(rpcError);
+        return;
+      }
+      setSuDone(true);
+    } catch {
       setBusy(false);
-      setError(err?.message ?? "Network error.");
+      setError("Network error. Check your connection.");
     }
   }
 
-  /* ── Kathay: verify OTP ── */
-  async function handleVerifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    if (otp.length !== 6) { setError("Enter the 6-digit code."); return; }
-    setError(null); setBusy(true);
-    try {
-      const { insforge: client } = await import("@/lib/insforge");
-      const { error } = await client.auth.verifyOtp({ email: kathayEmail.trim(), otp: otp.trim() });
-      setBusy(false);
-      if (error) { setError(error.message ?? "Invalid or expired code. Request a new one."); return; }
-      await refresh();
-      router.push("/kathay");
-    } catch (err: any) {
-      setBusy(false);
-      setError(err?.message ?? "Verification failed. Try again.");
-    }
-  }
-
-  const panel = PANELS[portal];
-  const btnGrad =
-    portal === "kathay" ? "linear-gradient(135deg,#3730a3 0%,#6366f1 100%)" :
-    portal === "parent"  ? "linear-gradient(135deg,#064e3b 0%,#059669 100%)" :
-                           "linear-gradient(135deg,#1e40af 0%,#1d4ed8 100%)";
-
-  const emailPlaceholder =
-    portal === "kathay" ? "admin@kathay.co.ug" :
-    portal === "parent"  ? "you@email.com" : "you@school.edu";
+  // ── Branding panel config ──
+  const isKathay = tab === "kathay";
+  const isSignup = tab === "signup";
+  const grad = isKathay
+    ? "linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #6366f1 100%)"
+    : "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)";
+  const particleColor = isKathay ? "#a5b4fc" : "#93c5fd";
+  const labelText = isKathay ? "PLATFORM ADMIN" : isSignup ? "SCHOOL REGISTRATION" : "SCHOOL PORTAL";
+  const headline = isKathay
+    ? "One platform.\nEvery school."
+    : isSignup
+    ? "Register your\nschool."
+    : "Attendance,\nsimplified.";
+  const sub = isKathay
+    ? "Manage all schools, devices, SMS carriers and onboarding from a single secure console."
+    : isSignup
+    ? "Submit your school details for approval. A Kathay administrator will review your request and grant access once approved."
+    : "Biometric gate scans, real-time attendance, parent SMS and departure control — all in one place.";
+  const features = isKathay
+    ? [
+        { icon: "🏫", text: "Multi-school tenant management" },
+        { icon: "🖥", text: "Device & hardware fleet monitoring" },
+        { icon: "📊", text: "Revenue and carrier analytics" },
+      ]
+    : isSignup
+    ? [
+        { icon: "📝", text: "Fill in your school details" },
+        { icon: "✅", text: "Kathay admin reviews & approves" },
+        { icon: "🔓", text: "Access your school dashboard" },
+      ]
+    : [
+        { icon: "👆", text: "Fingerprint & RFID gate readers" },
+        { icon: "💬", text: "Instant parent SMS notifications" },
+        { icon: "🛡", text: "Safeguarding-first departure control" },
+      ];
 
   return (
-    <div className="min-h-screen flex" style={{ fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif" }}>
+    <div
+      className="min-h-screen flex"
+      style={{ fontFamily: "'Plus Jakarta Sans','Inter',system-ui,sans-serif" }}
+    >
+      {/* ════════ LEFT BRANDING PANEL ════════ */}
+      <div
+        className="hidden lg:flex lg:w-[46%] flex-col justify-between p-12 relative overflow-hidden"
+        style={{ background: grad, transition: "background 0.4s ease" }}
+      >
+        {/* Particle field */}
+        <div className="absolute inset-0 z-0">
+          <ParticleField
+            color={particleColor}
+            count={80}
+            connectionDistance={120}
+            speed={0.3}
+          />
+        </div>
 
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-[46%] flex-col justify-between p-12 relative overflow-hidden"
-        style={{ background: panel.grad, transition: "background 0.4s ease" }}>
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10 pointer-events-none"
-          style={{ background: "radial-gradient(circle,#fff 0%,transparent 70%)" }} />
-        <div className="absolute -bottom-40 -right-20 w-[500px] h-[500px] rounded-full opacity-10 pointer-events-none"
-          style={{ background: "radial-gradient(circle,#fff 0%,transparent 70%)" }} />
+        {/* Glow decorations */}
+        <div
+          className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10 pointer-events-none"
+          style={{ background: "radial-gradient(circle,#fff 0%,transparent 70%)" }}
+        />
+        <div
+          className="absolute -bottom-40 -right-20 w-[500px] h-[500px] rounded-full opacity-10 pointer-events-none"
+          style={{ background: "radial-gradient(circle,#fff 0%,transparent 70%)" }}
+        />
 
+        {/* Brand */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center font-extrabold text-white text-xl shadow-lg">K</div>
+          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center font-extrabold text-white text-xl shadow-lg">
+            K
+          </div>
           <div>
             <div className="text-white font-extrabold text-lg leading-tight">Kathay</div>
             <div className="text-white/60 text-xs">School Attendance Platform</div>
           </div>
         </div>
 
+        {/* Headline + features */}
         <div className="relative z-10 space-y-8">
           <div>
-            <div className="text-white/60 text-xs font-bold uppercase tracking-widest mb-3">{panel.label}</div>
-            <h1 className="text-4xl xl:text-5xl font-extrabold text-white leading-tight">{panel.headline}</h1>
-            <p className="mt-4 text-white/70 text-base leading-relaxed max-w-sm">{panel.sub}</p>
+            <div className="text-white/60 text-xs font-bold uppercase tracking-widest mb-3">
+              {labelText}
+            </div>
+            <h1 className="text-4xl xl:text-5xl font-extrabold text-white leading-tight whitespace-pre-line">
+              {headline}
+            </h1>
+            <p className="mt-4 text-white/70 text-base leading-relaxed max-w-sm">{sub}</p>
           </div>
           <div className="space-y-3">
-            {panel.features.map(f => (
-              <div key={f.text} className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl px-4 py-3">
+            {features.map((f) => (
+              <div
+                key={f.text}
+                className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl px-4 py-3"
+              >
                 <span className="text-lg shrink-0">{f.icon}</span>
                 <span className="text-white/90 text-sm font-medium">{f.text}</span>
               </div>
@@ -168,152 +263,417 @@ export default function LoginPage() {
         <div className="relative z-10 text-white/30 text-xs">2026 Kathay Technologies Ltd.</div>
       </div>
 
-      {/* Right panel */}
+      {/* ════════ RIGHT FORM PANEL ════════ */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 bg-white">
         <div className="w-full max-w-sm">
-
+          {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-blue-700 flex items-center justify-center font-extrabold text-white text-xl">K</div>
+            <div className="w-12 h-12 rounded-2xl bg-blue-700 flex items-center justify-center font-extrabold text-white text-xl">
+              K
+            </div>
           </div>
 
+          {/* Heading */}
           <div className="mb-7">
-            <h2 className="text-2xl font-extrabold text-slate-900">Sign In</h2>
+            <h2 className="text-2xl font-extrabold text-slate-900">
+              {isSignup ? "Register Your School" : "Sign In"}
+            </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Access your {portal === "kathay" ? "Kathay admin" : portal === "parent" ? "parent" : "school"} dashboard
+              {isKathay
+                ? "Access the Kathay admin console"
+                : isSignup
+                ? "Awaiting Kathay admin approval"
+                : "Access your school dashboard"}
             </p>
           </div>
 
-          {/* Portal tabs */}
+          {/* ══ Tab buttons ══ */}
           <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl mb-7">
-            {(["school", "parent", "kathay"] as Portal[]).map(p => (
-              <button key={p} type="button" onClick={() => switchPortal(p)}
-                className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
-                  portal === p ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}>
-                {p === "school" ? "School Staff" : p === "parent" ? "Parent" : "Kathay Admin"}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => { setTab("school"); resetTab(); }}
+              className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                tab === "school"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              School Staff
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTab("kathay"); resetTab(); }}
+              className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                tab === "kathay"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Kathay Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTab("signup"); resetTab(); }}
+              className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                tab === "signup"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Sign Up
+            </button>
           </div>
 
-          {/* ══ KATHAY ADMIN: OTP sign-in ══ */}
-          {portal === "kathay" && (
+          {/* ══ SCHOOL STAFF FORM ══ */}
+          {tab === "school" && (
+            <form onSubmit={handleSchoolSignIn} className="space-y-4">
+              {/* Email */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@school.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    Forgot?
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showPwd ? "text" : "password"}
+                    required
+                    autoComplete="current-password"
+                    placeholder="Your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 pr-12 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd(!showPwd)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
+                  >
+                    {showPwd ? "HIDE" : "SHOW"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 transition-all"
+                style={{
+                  background: "linear-gradient(135deg,#1e40af 0%,#1d4ed8 100%)",
+                  boxShadow: "0 4px 14px rgba(29,78,216,0.3)",
+                }}
+              >
+                {busy ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+
+              {/* Switch to signup */}
+              <p className="text-xs text-slate-400 text-center pt-2">
+                Don't have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => { setTab("signup"); resetTab(); }}
+                  className="text-blue-700 font-semibold hover:underline"
+                >
+                  Register your school
+                </button>
+              </p>
+            </form>
+          )}
+
+          {/* ══ KATHAY ADMIN FORM ══ */}
+          {tab === "kathay" && (
             <>
-              {kathayStep === "request" ? (
-                <form onSubmit={handleSendCode} className="space-y-5">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Admin Email</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </span>
-                      <input type="email" required autoComplete="email"
-                        placeholder="admin@kathay.co.ug"
-                        value={kathayEmail} onChange={e => setKathayEmail(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400" />
-                    </div>
-                    <p className="mt-1.5 text-xs text-slate-400">A 6-digit sign-in code will be sent to this address.</p>
+              {linkSent ? (
+                /* ── Link sent confirmation ── */
+                <div className="space-y-5 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-3xl mx-auto">
+                    ✉️
                   </div>
-
-                  {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-                  <button type="submit" disabled={busy}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 transition-all"
-                    style={{ background: "linear-gradient(135deg,#3730a3 0%,#6366f1 100%)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
-                    {busy
-                      ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Sending code...</>
-                      : <>✉ Send sign-in code</>}
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Check your email</h3>
+                    <p className="mt-1.5 text-sm text-slate-500">
+                      We sent a sign-in link to{" "}
+                      <span className="font-semibold text-slate-800">{kathayEmail}</span>.
+                      Open the email and click the link to access the admin portal.
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 text-left">
+                    <strong>⚠ Open the link in a browser tab.</strong> If your browser didn't
+                    open, copy the link from the email and paste it into Chrome or Edge.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLinkSent(false);
+                      setKathayEmail("");
+                      setError("");
+                    }}
+                    className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                  >
+                    ← Use a different email
                   </button>
-                </form>
+                </div>
               ) : (
-                <form onSubmit={handleVerifyCode} className="space-y-5">
-                  <div className="rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3 text-sm text-indigo-800 text-center">
-                    Code sent to <span className="font-bold">{kathayEmail}</span>
-                  </div>
-
+                /* ── Email input form ── */
+                <form onSubmit={handleKathaySendLink} className="space-y-5">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">6-digit code</label>
-                    <input required autoFocus type="text" inputMode="numeric" maxLength={6}
-                      placeholder="000000" value={otp}
-                      onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
-                      className="w-full text-center text-3xl font-extrabold tracking-[0.6em] py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300" />
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Admin Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      placeholder="admin@kathay.co.ug"
+                      value={kathayEmail}
+                      onChange={(e) => setKathayEmail(e.target.value)}
+                      className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
+                    />
+                    <p className="mt-1.5 text-xs text-slate-400">
+                      A secure sign-in link will be emailed — no password needed.
+                    </p>
                   </div>
 
-                  {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
+                  {error && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                      {error}
+                    </div>
+                  )}
 
-                  <button type="submit" disabled={busy || otp.length < 6}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all"
-                    style={{ background: "linear-gradient(135deg,#3730a3 0%,#6366f1 100%)", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" }}>
-                    {busy
-                      ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Verifying...</>
-                      : <>→ Verify & Access Portal</>}
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 transition-all"
+                    style={{
+                      background: "linear-gradient(135deg,#3730a3 0%,#6366f1 100%)",
+                      boxShadow: "0 4px 14px rgba(99,102,241,0.35)",
+                    }}
+                  >
+                    {busy ? (
+                      <>
+                        <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                        Sending link...
+                      </>
+                    ) : (
+                      "Send sign-in link ✉"
+                    )}
                   </button>
-
-                  {countdown > 0
-                    ? <p className="text-xs text-slate-400 text-center">Resend in <span className="font-bold text-indigo-600">{countdown}s</span></p>
-                    : <button type="button" onClick={() => { setKathayStep("request"); setOtp(""); setError(null); setKathayEmail(""); }}
-                        className="w-full text-xs text-slate-400 hover:text-slate-700 transition-colors py-1">← Send a new code</button>}
                 </form>
               )}
             </>
           )}
 
-          {/* ══ SCHOOL / PARENT: password sign-in ══ */}
-          {portal !== "kathay" && (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email</label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </span>
-                <input type="email" required autoComplete="email"
-                  placeholder={emailPlaceholder}
-                  value={email} onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400" />
-              </div>
-            </div>
+          {/* ══ SIGN UP FORM ══ */}
+          {tab === "signup" && (
+            <>
+              {suDone ? (
+                /* ── Pending approval confirmation ── */
+                <div className="space-y-5 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-3xl mx-auto">
+                    ⏳
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Request submitted</h3>
+                    <p className="mt-1.5 text-sm text-slate-500">
+                      Your school registration for{" "}
+                      <span className="font-semibold text-slate-800">{suSchoolName}</span> has been
+                      submitted. A Kathay administrator will review and approve your request.
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-800 text-left">
+                    <strong>You'll receive access once approved.</strong> After approval, return to
+                    this page and sign in with your email and password.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSuDone(false);
+                      setSuSchoolName("");
+                      setSuName("");
+                      setSuEmail("");
+                      setSuPassword("");
+                      setSuPhone("");
+                      setError("");
+                      setTab("school");
+                    }}
+                    className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                  >
+                    ← Back to sign in
+                  </button>
+                </div>
+              ) : (
+                /* ── Registration form ── */
+                <form onSubmit={handleSchoolSignUp} className="space-y-4">
+                  {/* School name */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      School Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Greenhill Academy"
+                      value={suSchoolName}
+                      onChange={(e) => setSuSchoolName(e.target.value)}
+                      className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Password</label>
-                <button type="button" className="text-xs text-blue-600 hover:text-blue-800 font-semibold">Forgot?</button>
-              </div>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </span>
-                <input type={showPwd ? "text" : "password"} required autoComplete="current-password"
-                  placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400" />
-                <button type="button" onClick={() => setShowPwd(!showPwd)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors">
-                  {showPwd
-                    ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" /></svg>
-                    : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>}
-                </button>
-              </div>
-            </div>
+                  {/* Admin name */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Your Full Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Jane Mukasa"
+                      value={suName}
+                      onChange={(e) => setSuName(e.target.value)}
+                      className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
 
-            {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
+                  {/* Email */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      placeholder="admin@school.edu"
+                      value={suEmail}
+                      onChange={(e) => setSuEmail(e.target.value)}
+                      className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
 
-            <button type="submit" disabled={busy}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 transition-all"
-              style={{ background: busy ? "#93c5fd" : btnGrad, boxShadow: busy ? "none" : "0 4px 14px rgba(29,78,216,0.25)" }}>
-              {busy
-                ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />Signing in...</>
-                : <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>Sign In</>}
-            </button>
-          </form>
+                  {/* Phone */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Phone (optional)
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="+256 700 000 000"
+                      value={suPhone}
+                      onChange={(e) => setSuPhone(e.target.value)}
+                      className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPwd ? "text" : "password"}
+                        required
+                        autoComplete="new-password"
+                        placeholder="Min. 6 characters"
+                        value={suPassword}
+                        onChange={(e) => setSuPassword(e.target.value)}
+                        className="w-full px-4 pr-12 py-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPwd(!showPwd)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
+                      >
+                        {showPwd ? "HIDE" : "SHOW"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Error */}
+                  {error && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                      {error}
+                    </div>
+                  )}
+
+                  {/* Submit */}
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 transition-all"
+                    style={{
+                      background: "linear-gradient(135deg,#1e40af 0%,#1d4ed8 100%)",
+                      boxShadow: "0 4px 14px rgba(29,78,216,0.3)",
+                    }}
+                  >
+                    {busy ? (
+                      <>
+                        <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Registration"
+                    )}
+                  </button>
+
+                  {/* Switch to sign in */}
+                  <p className="text-xs text-slate-400 text-center pt-2">
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      onClick={() => { setTab("school"); resetTab(); }}
+                      className="text-blue-700 font-semibold hover:underline"
+                    >
+                      Sign in
+                    </button>
+                  </p>
+                </form>
+              )}
+            </>
           )}
 
+          {/* Footer */}
           <div className="mt-6 text-center">
-            <p className="text-xs text-slate-400">Protected by encryption · Kathay Technologies</p>
+            <p className="text-xs text-slate-400">
+              Protected by encryption · Kathay Technologies
+            </p>
           </div>
         </div>
       </div>
