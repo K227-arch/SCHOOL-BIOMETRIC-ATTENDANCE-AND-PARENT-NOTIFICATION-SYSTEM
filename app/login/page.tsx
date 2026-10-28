@@ -97,59 +97,39 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      // 1. Create auth account
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: suEmail.trim(),
-        password: suPassword,
-        options: { data: { name: suName.trim(), full_name: suName.trim() } },
+      // 1. Create auth account via edge function (auto-confirms email)
+      //    Use supabase.functions.invoke so URL is resolved from the client config
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke("auto-confirm-user", {
+        body: { email: suEmail.trim(), password: suPassword },
       });
 
-      if (authErr) {
+      if (fnErr || fnData?.error) {
         setBusy(false);
-        setError(authErr.message || "Failed to create account.");
+        setError(fnData?.error || fnErr?.message || "Failed to create account.");
         return;
       }
 
-      // If Supabase requires email confirmation, we still submit the request
-      // — the user will confirm email later, the request is already queued.
-
-      // 2. Submit signup request (creates a pending row)
-      //    If session wasn't created (email confirmation required), sign in
-      //    temporarily to run the RPC, then sign out.
-      let rpcError: string | null = null;
-
-      if (authData.session) {
-        // Session created — call RPC directly
-        const { error: rErr } = await supabase.rpc("submit_school_signup", {
-          p_school_name: suSchoolName.trim(),
-          p_admin_name: suName.trim(),
-          p_phone: suPhone.trim() || null,
-        });
-        rpcError = rErr?.message ?? null;
-      } else {
-        // Email confirmation required — sign in with password to get a session,
-        // submit the request, then the user will be in "pending" state.
-        const { error: signInErr } = await supabase.auth.signInWithPassword({
-          email: suEmail.trim(),
-          password: suPassword,
-        });
-        if (signInErr) {
-          // Can't sign in yet (email not confirmed) — still show pending
-          setBusy(false);
-          setSuDone(true);
-          return;
-        }
-        const { error: rErr } = await supabase.rpc("submit_school_signup", {
-          p_school_name: suSchoolName.trim(),
-          p_admin_name: suName.trim(),
-          p_phone: suPhone.trim() || null,
-        });
-        rpcError = rErr?.message ?? null;
+      // If user already existed, tell them to use the sign-in tab
+      if (fnData?.existed) {
+        setBusy(false);
+        setError("An account with this email already exists. Please sign in using the School Staff tab.");
+        return;
       }
 
+      // 2. Call the open RPC — pass null for user_id to avoid FK issues
+      //    when email confirmation is pending (user may not be in auth.users yet).
+      //    The request is linked by email; user_id gets set on approval.
+      const { error: rpcErr } = await supabase.rpc("submit_school_signup_open", {
+        p_school_name: suSchoolName.trim(),
+        p_admin_name:  suName.trim(),
+        p_email:       suEmail.trim(),
+        p_phone:       suPhone.trim() || null,
+        p_user_id:     null,
+      });
+
       setBusy(false);
-      if (rpcError) {
-        setError(rpcError);
+      if (rpcErr) {
+        setError(rpcErr.message || "Failed to submit registration.");
         return;
       }
       setSuDone(true);

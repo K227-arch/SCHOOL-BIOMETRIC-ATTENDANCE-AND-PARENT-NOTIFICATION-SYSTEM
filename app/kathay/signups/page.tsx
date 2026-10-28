@@ -105,7 +105,7 @@ export default function SignupApprovalsPage() {
       </div>
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {[
           { label: "Pending", value: counts.pending, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
           { label: "Approved", value: counts.approved, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },

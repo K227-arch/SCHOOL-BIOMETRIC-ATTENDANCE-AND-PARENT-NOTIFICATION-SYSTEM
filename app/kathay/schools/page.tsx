@@ -386,6 +386,7 @@ export default function KathaySchoolsPage() {
             )}
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-slate-700 text-left text-[11px] uppercase tracking-wider text-slate-400">
               <tr>
@@ -454,6 +455,7 @@ export default function KathaySchoolsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

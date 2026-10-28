@@ -153,7 +153,7 @@ export default function LiveAttendancePage() {
           <div className="relative self-end">
             <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
             <input type="text" placeholder="Search pupil or admission no…" value={search} onChange={e => setSearch(e.target.value)}
-              className="input pl-8" style={{ width: 220 }} />
+              className="input pl-8 w-full sm:w-56" />
           </div>
         </div>
 

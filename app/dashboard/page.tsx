@@ -183,7 +183,7 @@ export default function DashboardPage() {
 
       {/* ── Tab bar ── */}
       <div className="bg-white border-b border-slate-200 px-5">
-        <div className="flex items-center gap-1 pt-2">
+        <div className="flex items-center gap-1 pt-2 overflow-x-auto scrollbar-none">
           {([
             ["overview",   "Overview"],
             ["today",      "Today"],
@@ -196,7 +196,7 @@ export default function DashboardPage() {
               type="button"
               onClick={() => setTab(key)}
               className={cn(
-                "px-4 py-2 text-sm font-semibold rounded-t transition-colors border-b-2",
+                "px-4 py-2 text-sm font-semibold rounded-t transition-colors border-b-2 whitespace-nowrap shrink-0",
                 tab === key
                   ? "bg-blue-600 text-white border-blue-600"
                   : "text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-50"
@@ -406,9 +406,9 @@ export default function DashboardPage() {
               </div>
             </div>
             {pupilHistory ? (
-              <div className="p-4 flex gap-4">
+              <div className="p-4 flex flex-col sm:flex-row gap-4">
                 {/* Profile card */}
-                <div className="shrink-0 w-32">
+                <div className="shrink-0 sm:w-32 w-full flex sm:block items-center gap-3 sm:gap-0">
                   <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl mb-2">👤</div>
                   <div className="text-sm font-bold text-slate-900 leading-tight">
                     {fullName(pupilHistory.pupil.first_name, pupilHistory.pupil.last_name)}

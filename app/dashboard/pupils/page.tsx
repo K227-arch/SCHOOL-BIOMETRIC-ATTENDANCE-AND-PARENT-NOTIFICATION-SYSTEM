@@ -323,7 +323,7 @@ export default function PupilManagementPage() {
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {/* Pupil details */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 {[
                   { label: "Gender",      value: selected.gender === "M" ? "Male" : selected.gender === "F" ? "Female" : "—" },
                   { label: "D.O.B.",      value: selected.date_of_birth ?? "—" },
@@ -478,7 +478,7 @@ export default function PupilManagementPage() {
               {/* Pupil details */}
               <div>
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Pupil Details</div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div><label className="label">First Name <span className="text-red-400">*</span></label>
                     <input required className="input" placeholder="e.g. Joshua"
                       value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} /></div>
@@ -525,7 +525,7 @@ export default function PupilManagementPage() {
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">
                   Primary Guardian / Parent <span className="text-red-400">*</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div><label className="label">Full Name <span className="text-red-400">*</span></label>
                     <input required className="input" placeholder="e.g. Agnes Kigozi"
                       value={form.g1Name} onChange={e => setForm({ ...form, g1Name: e.target.value })} /></div>
