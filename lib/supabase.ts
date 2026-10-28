@@ -1,14 +1,14 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-if (!supabaseUrl || !supabaseAnon) {
-  throw new Error('Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local')
-}
+const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
+const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
 // Singleton browser client — safe to import from any client component
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnon)
+// Falls back to empty strings at build time (Vercel); real values come from env vars at runtime
+export const supabase = createBrowserClient(
+  supabaseUrl  || 'https://placeholder.supabase.co',
+  supabaseAnon || 'placeholder-anon-key'
+)
 
 // Role types used throughout the app
 export type StaffRole = 'kathay_admin' | 'school_admin' | 'gate_staff' | 'supervisor'
