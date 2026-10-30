@@ -37,14 +37,15 @@ export default function SchoolProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">School Profile</h2>
-        <p className="mt-1 text-sm text-slate-500">Contact details, school hours and identification code shown to staff and parents.</p>
+      {/* Page header */}
+      <div className="rounded-xl p-4 text-white" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)" }}>
+        <h1 className="text-sm font-bold">School Profile</h1>
+        <p className="text-blue-100 text-xs mt-0.5">Contact details, school hours and identification code shown to staff and parents.</p>
       </div>
       {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {saved && <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">Profile saved.</div>}
 
-      <form onSubmit={save} className="card max-w-2xl space-y-4 p-6">
+      <form onSubmit={save} className="card max-w-2xl space-y-4 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div><label className="label">School name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div><label className="label">School code (read-only)</label><input className="input bg-slate-50" disabled value={school?.code ?? "—"} /></div>

@@ -60,18 +60,16 @@ export default function OnboardingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">Onboarding Checklist</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Complete all steps before going live. This project must not proceed to biometric
-          enrolment until data-protection arrangements are approved.
-        </p>
+      {/* Page header */}
+      <div className="rounded-xl p-4 text-white" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)" }}>
+        <h1 className="text-sm font-bold">Onboarding Checklist</h1>
+        <p className="text-blue-100 text-xs mt-0.5">Complete all steps before going live. This project must not proceed to biometric enrolment until data-protection arrangements are approved.</p>
       </div>
       {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
       <div className="card p-5">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-900">Progress</span>
+          <span className="text-sm font-bold text-slate-900">Progress</span>
           <span className="text-sm font-bold text-slate-900">{completed}/{items.length}</span>
         </div>
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">

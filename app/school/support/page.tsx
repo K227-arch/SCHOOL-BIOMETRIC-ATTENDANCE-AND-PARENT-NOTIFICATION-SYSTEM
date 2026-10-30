@@ -49,15 +49,16 @@ export default function SchoolSupportPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">Support Tickets</h2>
-        <p className="mt-1 text-sm text-slate-500">Submit technical support requests to Kathay Technologies. Track status here.</p>
+      {/* Page header */}
+      <div className="rounded-xl p-4 text-white" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)" }}>
+        <h1 className="text-sm font-bold">Support Tickets</h1>
+        <p className="text-blue-100 text-xs mt-0.5">Submit technical support requests to Kathay Technologies. Track status here.</p>
       </div>
       {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {sent && <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">Ticket submitted. Kathay support will respond shortly.</div>}
 
       <form onSubmit={submit} className="card p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-900">New support request</h3>
+        <h3 className="text-sm font-bold text-slate-900">New support request</h3>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="sm:col-span-3"><label className="label">Subject</label><input className="input" required value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Briefly describe the issue" /></div>
           <div><label className="label">Category</label>
@@ -86,9 +87,9 @@ export default function SchoolSupportPage() {
       </form>
 
       <div className="card p-0">
-        <div className="border-b border-slate-200 p-4"><h3 className="text-sm font-semibold text-slate-900">Your tickets</h3></div>
+        <div className="border-b border-slate-100 px-4 py-3"><h3 className="text-sm font-bold text-slate-900">Your tickets</h3></div>
         {tickets.length === 0 ? <p className="p-6 text-center text-sm text-slate-400">No tickets yet.</p> : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-50">
             {tickets.map((t) => (
               <div key={t.id} className="p-4">
                 <div className="flex items-start justify-between gap-4">

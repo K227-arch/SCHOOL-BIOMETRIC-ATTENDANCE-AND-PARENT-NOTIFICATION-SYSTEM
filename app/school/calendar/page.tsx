@@ -50,14 +50,15 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">School Calendar</h2>
-        <p className="mt-1 text-sm text-slate-500">Set school days, holidays, breaks and term dates. These determine which days attendance is recorded.</p>
+      {/* Page header */}
+      <div className="rounded-xl p-4 text-white" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)" }}>
+        <h1 className="text-sm font-bold">School Calendar</h1>
+        <p className="text-blue-100 text-xs mt-0.5">Set school days, holidays, breaks and term dates. These determine which days attendance is recorded.</p>
       </div>
       {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
       <form onSubmit={addEntry} className="card p-5">
-        <h3 className="text-sm font-semibold text-slate-900">Add calendar entry</h3>
+          <h3 className="text-sm font-bold text-slate-900">Add calendar entry</h3>
         <div className="mt-4 grid gap-4 sm:grid-cols-4">
           <div>
             <label className="label">Date</label>
@@ -81,30 +82,32 @@ export default function CalendarPage() {
       </form>
 
       <div className="card p-0">
-        {entries.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-400">No calendar entries yet.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {entries.map((e) => (
-                <tr key={e.id}>
+        <div className="overflow-x-auto">
+          {entries.length === 0 ? (
+            <p className="p-8 text-center text-xs text-slate-400">No calendar entries yet.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 border-b border-slate-100 text-left text-[11px] uppercase text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {entries.map((e) => (
+                  <tr key={e.id} className="hover:bg-slate-50/70 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-900">{formatDate(e.date)}</td>
                   <td className="px-4 py-3">
                     <span className={cn("badge capitalize", DAY_TYPE_STYLES[e.day_type])}>{e.day_type.replace("_", " ")}</span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{e.notes ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-600 text-xs">{e.notes ?? "-"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

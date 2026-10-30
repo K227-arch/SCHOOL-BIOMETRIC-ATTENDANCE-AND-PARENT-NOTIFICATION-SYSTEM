@@ -61,17 +61,16 @@ export default function SchoolGuardiansPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">Guardians</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Verified parent contacts and parent portal account requests awaiting approval.
-        </p>
+      {/* Page header */}
+      <div className="rounded-xl p-4 text-white" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)" }}>
+        <h1 className="text-sm font-bold">Guardians</h1>
+        <p className="text-blue-100 text-xs mt-0.5">Verified parent contacts and parent portal account requests awaiting approval.</p>
       </div>
       {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
       {pendingAccounts.length > 0 && (
         <div className="card p-5">
-          <h3 className="text-sm font-semibold text-slate-900">⚠ Pending parent portal requests ({pendingAccounts.length})</h3>
+          <h3 className="text-sm font-bold text-slate-900">Pending parent portal requests ({pendingAccounts.length})</h3>
           <p className="mt-1 text-xs text-slate-500">These parents have requested access. Verify their identity and approve.</p>
           <div className="mt-3 divide-y divide-slate-100">
             {pendingAccounts.map((pa) => {
@@ -101,8 +100,8 @@ export default function SchoolGuardiansPage() {
           {guardians.length === 0 ? (
             <p className="p-6 text-center text-sm text-slate-400">No guardians found.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-slate-50 text-left text-[11px] uppercase text-slate-400">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Guardian</th>
                   <th className="px-4 py-2.5 font-medium">Pupil</th>
@@ -111,12 +110,12 @@ export default function SchoolGuardiansPage() {
                   <th className="px-4 py-2.5 font-medium">Portal</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-50">
                 {guardians.map((g) => {
                   const p = pupilMap[g.pupil_id];
                   const pa = parentAccounts.find((x) => x.guardian_id === g.id);
                   return (
-                    <tr key={g.id}>
+                    <tr key={g.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="px-4 py-2.5">
                         <div className="font-medium text-slate-900">{g.full_name}</div>
                         <div className="text-xs text-slate-500">{g.relationship ?? "—"}{g.is_primary && " · Primary"}</div>

@@ -55,12 +55,10 @@ export default function SMSTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">SMS Notification Templates</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Arrival and departure SMS messages sent to verified guardians. Messages must
-          describe what is recorded — not promise the child is safe or already home.
-        </p>
+      {/* Page header */}
+      <div className="rounded-xl p-4 text-white" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a56a0 40%, #0ea5e9 100%)" }}>
+        <h1 className="text-sm font-bold">SMS Notification Templates</h1>
+        <p className="text-blue-100 text-xs mt-0.5">Arrival and departure SMS messages sent to verified guardians. Messages must describe what is recorded — not promise the child is safe or already home.</p>
       </div>
       {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {saved && <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">Template saved.</div>}
@@ -73,7 +71,7 @@ export default function SMSTemplatesPage() {
 
       {(["arrival", "departure"] as const).map((type) => (
         <div key={type} className="card p-5">
-          <h3 className="text-sm font-semibold capitalize text-slate-900">{type} message</h3>
+        <h3 className="text-sm font-bold capitalize text-slate-900">{type} message</h3>
           <textarea rows={3} className="input mt-3"
             value={editing[type] ?? DEFAULTS[type]}
             onChange={(e) => setEditing((prev) => ({ ...prev, [type]: e.target.value }))} />
